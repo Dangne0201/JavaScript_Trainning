@@ -13,6 +13,7 @@ app.use(
       const allowedOrigins = [
         process.env.CLIENT_URL || 'http://localhost:5173',
         'http://127.0.0.1:5173',
+        'https://java-script-trainning-b49zzt1fc-dang-b4a4.vercel.app',
       ];
 
       if (!origin || allowedOrigins.includes(origin)) {
