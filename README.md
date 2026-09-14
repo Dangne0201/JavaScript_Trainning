@@ -2,9 +2,9 @@
 
 Backend for the Personal Task Manager project. The application is being built in stages from the supplied project prompt.
 
-## Current stage: Step 7
+## Current stage: Complete
 
-The `backend/` directory currently includes:
+The project includes:
 
 - Express API on port `5000`
 - MongoDB connection through Mongoose
@@ -13,8 +13,9 @@ The `backend/` directory currently includes:
 - User-owned task CRUD endpoints
 - Request validation and centralized JSON error handling
 - CORS configuration for the Vite frontend
-
-File upload, email reminders, and the React frontend will be added in later stages.
+- Cloudinary avatar uploads
+- Nodemailer deadline reminders with a daily cron job
+- React/Vite/Tailwind frontend with protected routes and task management UI
 
 ## User endpoints
 
@@ -38,6 +39,12 @@ Deployment configuration is included in [render.yaml](./render.yaml) for Render
 and [frontend/vercel.json](./frontend/vercel.json) for Vercel SPA routing.
 Create the Render environment variables from `backend/.env.example`, then set
 the deployed API URL as `VITE_API_URL` in the Vercel project.
+
+Production deployment:
+
+- Frontend: https://java-script-trainning-b49zzt1fc-dang-b4a4.vercel.app
+- API: https://personal-task-manager-api-h8wl.onrender.com
+- API health check: https://personal-task-manager-api-h8wl.onrender.com/api/health
 
 ## Run the backend
 
