@@ -7,8 +7,17 @@ const port = process.env.PORT || 5000;
 
 const startServer = async () => {
   await connectDatabase();
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`Server running on port ${port}`);
+  });
+
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(`Port ${port} is already in use. Stop the other server and try again.`);
+      process.exit(1);
+    }
+
+    throw error;
   });
 };
 

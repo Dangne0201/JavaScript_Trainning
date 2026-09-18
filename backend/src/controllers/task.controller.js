@@ -24,8 +24,8 @@ const updateTask = async (req, res, next) => {
       { _id: req.params.id },
       { title: req.body.title, status: req.body.status },
       {
-      new: true,
-      runValidators: true,
+        new: true,
+        runValidators: true,
       }
     );
 

@@ -1,0 +1,11 @@
+services:
+  mongodb:
+    image: mongo:8
+    container_name: personal-task-manager-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - personal-task-manager-data:/data/db
+
+volumes:
+  personal-task-manager-data:
