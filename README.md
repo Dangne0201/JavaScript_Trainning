@@ -1,113 +1,54 @@
 # Personal Task Manager
 
-Backend for the Personal Task Manager project. The application is being built in stages from the supplied project prompt.
+Một project nhỏ để học JavaScript qua ứng dụng quản lý công việc.
 
-## Current stage: Complete
+## Công nghệ
 
-The project includes:
+- JavaScript thuần cho giao diện và logic
+- Node.js để chạy backend
+- Express.js để tạo API
+- MongoDB và Mongoose để lưu task
+- HTML tối giản, không dùng CSS, React hoặc Tailwind
 
-- Express API on port `5000`
-- MongoDB connection through Mongoose
-- `User` and `Task` models
-- JWT authentication with bcrypt password hashing
-- User-owned task CRUD endpoints
-- Request validation and centralized JSON error handling
-- CORS configuration for the Vite frontend
-- Cloudinary avatar uploads
-- Nodemailer deadline reminders with a daily cron job
-- React/Vite/Tailwind frontend with protected routes and task management UI
+## Chức năng
 
-## User endpoints
+- Xem danh sách task
+- Thêm task
+- Đánh dấu task đã hoàn thành hoặc chưa hoàn thành
+- Xóa task
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | `/api/users/me` | Get the authenticated user |
-| PUT | `/api/users/avatar` | Upload a JPG, PNG, or WEBP avatar (maximum 2MB) |
+## Chạy project
 
-The avatar endpoint expects a multipart/form-data field named `avatar`.
-
-## Deadline reminders
-
-The backend schedules a daily job at 08:00 server time. It finds non-completed
-tasks due in the next 24 hours and sends a reminder through Nodemailer.
-Configure `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, and optionally
-`EMAIL_SECURE` and `EMAIL_FROM` in `.env`.
-
-## Deployment
-
-Deployment configuration is included in [render.yaml](./render.yaml) for Render
-and [frontend/vercel.json](./frontend/vercel.json) for Vercel SPA routing.
-Create the Render environment variables from `backend/.env.example`, then set
-the deployed API URL as `VITE_API_URL` in the Vercel project.
-
-Production deployment:
-
-- Frontend: https://java-script-trainning-b49zzt1fc-dang-b4a4.vercel.app
-- API: https://personal-task-manager-api-h8wl.onrender.com
-- API health check: https://personal-task-manager-api-h8wl.onrender.com/api/health
-
-## Run the backend
-
-Requirements:
-
-- Node.js `v24.11.1` (the version used during this setup)
-- npm
-- A MongoDB Atlas connection string
+Yêu cầu Node.js, npm và MongoDB connection string.
 
 ```powershell
 cd backend
 Copy-Item .env.example .env
-# Fill MONGODB_URI in backend/.env
+# Điền MONGODB_URI trong backend/.env
 npm install
-npm run dev
+npm start
 ```
 
-The API health check is available at `http://localhost:5000/api/health`.
-
-## Authentication endpoints
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| POST | `/api/auth/register` | Register and receive a JWT |
-| POST | `/api/auth/login` | Login and receive a JWT |
-
-Use the returned token on task requests:
+Mở giao diện tại:
 
 ```text
-Authorization: Bearer YOUR_TOKEN
+http://localhost:5000
 ```
 
-## Task endpoints
+Backend phục vụ giao diện HTML trong thư mục `frontend` và cung cấp các API:
 
-All task endpoints now require a valid JWT. Each user can only see and modify their own tasks. The list endpoint supports:
-
-```text
-GET /api/tasks?search=express&status=todo&priority=high&tags=Backend,Học tập&page=1&limit=10
-```
-
-- `search`: case-insensitive search in the title
-- `status`: `todo`, `in-progress`, or `done`
-- `priority`: `low`, `medium`, or `high`
-- `tags`: comma-separated tags; a task matching any supplied tag is returned
-- `page` and `limit`: pagination, with a maximum limit of 100
-
-| Method | Endpoint | Purpose |
+| Method | Endpoint | Chức năng |
 | --- | --- | --- |
-| GET | `/api/tasks` | List tasks |
-| POST | `/api/tasks` | Create a task |
-| GET | `/api/tasks/:id` | Get one task |
-| PUT | `/api/tasks/:id` | Update a task |
-| DELETE | `/api/tasks/:id` | Delete a task |
+| GET | `/api/tasks` | Lấy danh sách task |
+| POST | `/api/tasks` | Thêm task |
+| PUT | `/api/tasks/:id` | Đổi tên hoặc trạng thái task |
+| DELETE | `/api/tasks/:id` | Xóa task |
 
-Example request body:
+Ví dụ dữ liệu task:
 
 ```json
 {
-  "title": "Learn Express",
-  "description": "Build the first API",
-  "deadline": "2026-09-20T10:00:00.000Z",
-  "priority": "high",
-  "status": "todo",
-  "tags": ["Học tập"]
+  "title": "Học JavaScript",
+  "status": "todo"
 }
 ```

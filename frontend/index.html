@@ -1,2 +1,24 @@
-<div id="root"></div>
-<script type="module" src="/src/main.jsx"></script>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Task Manager</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Task Manager</h1>
+
+      <form id="task-form" class="task-form">
+        <input id="task-title" type="text" placeholder="Task title" required />
+        <button type="submit">Add task</button>
+      </form>
+
+      <p id="message" class="message"></p>
+      <ul id="task-list" class="task-list"></ul>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
