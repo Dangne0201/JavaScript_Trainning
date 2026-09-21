@@ -1,6 +1,8 @@
 # Personal Task Manager
 
-Một project nhỏ để học JavaScript qua ứng dụng quản lý công việc.
+Một project nhỏ để học JavaScript qua ứng dụng quản lý công việc. Hướng dẫn
+chi tiết nằm trong [docs/HUONG_DAN_SU_DUNG.md](docs/HUONG_DAN_SU_DUNG.md), còn
+kiến trúc được giải thích trong [docs/GIAI_THICH_DU_AN.md](docs/GIAI_THICH_DU_AN.md).
 
 ## Công nghệ
 
@@ -17,7 +19,7 @@ Một project nhỏ để học JavaScript qua ứng dụng quản lý công vi�
 - Đánh dấu task đã hoàn thành hoặc chưa hoàn thành
 - Xóa task
 
-## Chạy project
+## Chạy project chính
 
 Yêu cầu Git, Node.js, npm và Docker Desktop.
 
@@ -31,6 +33,10 @@ Copy-Item .env.example .env
 npm install
 npm start
 ```
+
+Nếu PowerShell chặn `npm.ps1`, dùng `npm.cmd install` và `npm.cmd start`, hoặc
+chạy các lệnh npm trong Command Prompt. Trong Command Prompt, lệnh copy file là
+`copy .env.example .env`.
 
 Docker chạy MongoDB local ở `localhost:27017`. File `.env.example` đã có sẵn
 connection string phù hợp, nên chỉ cần copy thành `.env` rồi lưu lại. Không đổi
@@ -81,3 +87,9 @@ Ví dụ dữ liệu task:
   "status": "todo"
 }
 ```
+
+## Các thư mục bài học khác
+
+`backend_project/` là một project `json-server` độc lập. Thư mục `learning/`
+chứa các bài tập JavaScript riêng, không thuộc luồng chạy của Personal Task
+Manager.
