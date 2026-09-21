@@ -10,14 +10,12 @@ frontend/       Giao diện chính của Personal Task Manager
 backend/        REST API Express và kết nối MongoDB
 docker-compose.yml
                 Khởi động MongoDB local
-backend_project/
-                Một project json-server cũ dùng cho bài học khác
 learning/       Các file luyện tập JavaScript độc lập
 ```
 
-`backend_project/` và thư mục `learning/` không thuộc luồng chạy của
-Personal Task Manager. Khi chạy ứng dụng chính, chỉ cần dùng `frontend`,
-`backend` và `docker-compose.yml`.
+Thư mục `learning/` không thuộc luồng chạy của Personal Task Manager. Khi chạy
+ứng dụng chính, chỉ cần dùng `frontend`, `backend` và `docker-compose.yml`
+trong thư mục `project/`.
 
 ## 2. Luồng tổng thể
 
@@ -156,8 +154,8 @@ hoặc `done`. Với cập nhật và xóa, `:id` phải là MongoDB ObjectId h�
 
 ## 7. Những phần không thuộc ứng dụng chính
 
-- `backend_project/` là project `json-server` riêng, dùng `db.json` và chạy bằng
-  `npm run dev` trong thư mục đó.
+- `learning/backend_project/` là project `json-server` riêng, dùng `db.json` và
+  chạy bằng `npm run dev` trong thư mục đó.
 - `learning/` chứa các bài tập JavaScript/DOM độc lập.
 - Các file này không được backend chính sử dụng và không cần chạy khi sử dụng
   Personal Task Manager.

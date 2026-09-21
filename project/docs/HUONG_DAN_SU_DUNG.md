@@ -53,7 +53,7 @@ Collection: tasks
 Mở PowerShell hoặc Command Prompt tại thư mục repository:
 
 ```powershell
-cd F:\Javascript
+cd F:\Javascript\project
 docker compose up -d
 cd backend
 Copy-Item .env.example .env

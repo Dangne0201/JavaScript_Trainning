@@ -1,8 +1,16 @@
 # Personal Task Manager
 
-Một project nhỏ để học JavaScript qua ứng dụng quản lý công việc. Hướng dẫn
-chi tiết nằm trong [docs/HUONG_DAN_SU_DUNG.md](docs/HUONG_DAN_SU_DUNG.md), còn
-kiến trúc được giải thích trong [docs/GIAI_THICH_DU_AN.md](docs/GIAI_THICH_DU_AN.md).
+Repository được chia thành hai nhóm lớn:
+
+```text
+project/   Personal Task Manager đang chạy
+learning/  Các bài học và project luyện tập riêng
+```
+
+Hướng dẫn chi tiết nằm trong
+[project/docs/HUONG_DAN_SU_DUNG.md](project/docs/HUONG_DAN_SU_DUNG.md), còn
+kiến trúc được giải thích trong
+[project/docs/GIAI_THICH_DU_AN.md](project/docs/GIAI_THICH_DU_AN.md).
 
 ## Công nghệ
 
@@ -25,7 +33,7 @@ Yêu cầu Git, Node.js, npm và Docker Desktop.
 
 ```powershell
 git clone https://github.com/Dangne0201/JavaScript_Trainning.git
-cd JavaScript_Trainning
+cd JavaScript_Trainning\project
 docker compose up -d
 
 cd backend
@@ -90,6 +98,5 @@ Ví dụ dữ liệu task:
 
 ## Các thư mục bài học khác
 
-`backend_project/` là một project `json-server` độc lập. Thư mục `learning/`
-chứa các bài tập JavaScript riêng, không thuộc luồng chạy của Personal Task
-Manager.
+Thư mục `learning/` chứa các bài tập JavaScript và project `json-server` riêng,
+không thuộc luồng chạy của Personal Task Manager.
