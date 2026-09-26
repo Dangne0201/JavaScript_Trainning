@@ -5,18 +5,37 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "jest --runInBand",
+    "test:coverage": "jest --runInBand --coverage",
+    "lint": "node scripts/lint.js",
+    "format": "prettier --write \"*.js\" \"src/**/*.js\" \"tests/**/*.js\" \"scripts/**/*.js\" \"../frontend/**/*.{js,html,css}\" \"../docs/**/*.md\" \"../README.md\" \"../../README.md\" \"../docker-compose.yml\" \"../../.github/workflows/*.yml\"",
+    "format:check": "prettier --check \"*.js\" \"src/**/*.js\" \"tests/**/*.js\" \"scripts/**/*.js\" \"../frontend/**/*.{js,html,css}\" \"../docs/**/*.md\" \"../README.md\" \"../../README.md\" \"../docker-compose.yml\" \"../../.github/workflows/*.yml\"",
+    "migrate:legacy-tasks": "node scripts/assign-legacy-tasks.js"
   },
   "engines": {
     "node": ">=24.11.1"
   },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.5.2",
+    "mongodb-memory-server": "^11.3.0",
+    "nodemon": "^3.1.9",
+    "prettier": "^3.9.9",
+    "supertest": "^7.3.0"
+  },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.2.1",
     "express-validator": "^7.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.9"
   }
 }

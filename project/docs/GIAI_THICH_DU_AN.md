@@ -1,161 +1,81 @@
-# Giải thích dự án Personal Task Manager
+# Architecture and design
 
-Đây là ứng dụng CRUD task tối giản dùng JavaScript thuần ở frontend,
-Node.js/Express ở backend và MongoDB chạy trong Docker.
+Personal Task Manager is a single-page browser application served by an Express
+backend. MongoDB stores users and tasks. The `learning/` folder is separate from
+this application.
 
-## 1. Cấu trúc repository
+## Request flow
 
-```text
-frontend/       Giao diện chính của Personal Task Manager
-backend/        REST API Express và kết nối MongoDB
-docker-compose.yml
-                Khởi động MongoDB local
-learning/       Các file luyện tập JavaScript độc lập
+```mermaid
+flowchart LR
+  Browser[Browser UI] -->|HTTP requests and HttpOnly cookie| App[Express app]
+  App --> Auth[Authentication middleware]
+  Auth --> Routes[Validated routes]
+  Routes --> Controller[Controller]
+  Controller --> Service[Business service]
+  Service --> Model[Mongoose model]
+  Model --> DB[(MongoDB)]
 ```
 
-Thư mục `learning/` không thuộc luồng chạy của Personal Task Manager. Khi chạy
-ứng dụng chính, chỉ cần dùng `frontend`, `backend` và `docker-compose.yml`
-trong thư mục `project/`.
+- **Routes and validation** declare the HTTP contract and reject invalid input.
+- **Middleware** applies security headers, request limits, authentication, and
+  consistent error responses.
+- **Controllers** translate HTTP requests and results.
+- **Services** hold authentication, ownership, filtering, and persistence rules.
+- **Models** define user/task data and database constraints.
 
-## 2. Luồng tổng thể
+## Authentication and ownership
 
-```text
-Người dùng
-  -> frontend/index.html
-  -> frontend/app.js
-  -> HTTP API /api/tasks
-  -> backend/src/app.js
-  -> backend/src/routes/task.routes.js
-  -> backend/src/middlewares/validate.middleware.js
-  -> backend/src/controllers/task.controller.js
-  -> backend/src/models/Task.js
-  -> MongoDB database task_manager, collection tasks
-```
+Users choose a unique username and a password of at least 12 characters.
+Passwords are stored as bcrypt hashes, never as plaintext. The API returns an
+HTTP-only, `SameSite=Strict` cookie containing a signed token that expires after
+7 days; the browser JavaScript cannot read the token. Logging out increments
+the user's token version to immediately invalidate every session for that user,
+not just the cookie in the current browser. The secret comes from `JWT_SECRET`
+and must be at least 32 characters in production.
 
-Khi backend khởi động, `server.js` kết nối MongoDB trước rồi mới mở port HTTP.
+Every task has an `ownerId`. The task service scopes list, update, and delete
+queries to the authenticated user. A task belonging to a different user appears
+as not found, avoiding disclosure of its existence.
 
-## 3. Frontend
+## Task model and API design
 
-| File | Trách nhiệm |
-| --- | --- |
-| `frontend/index.html` | Form nhập task và danh sách task |
-| `frontend/style.css` | Giao diện và bố cục |
-| `frontend/app.js` | Gọi API, hiển thị task, đổi trạng thái và xóa task |
+Tasks have a title, workflow status, priority, optional due date, tags, owner,
+and timestamps. Lists are paginated (default 10, maximum 100), and can be
+searched and filtered. Sort fields are allow-listed so arbitrary database
+fields cannot be selected by query parameters.
 
-Frontend dùng `fetch()` với các API:
+See [API reference](./API.md) for endpoint details and response formats.
 
-```text
-GET    /api/tasks
-POST   /api/tasks
-PUT    /api/tasks/:id
-DELETE /api/tasks/:id
-```
+## Local data migration
 
-Backend phục vụ trực tiếp các file frontend bằng `express.static`, nên project
-hiện tại không dùng React, Vite, Axios hoặc Tailwind.
+Existing tasks created before authentication have no owner and are intentionally
+not visible to new accounts. After creating the intended account, run the
+explicit migration command described in the [user guide](./HUONG_DAN_SU_DUNG.md)
+to assign legacy tasks to that account. Review the target username before
+running it.
 
-## 4. Backend
+## Security and operational choices
 
-### `backend/src/server.js`
+- Helmet sets common HTTP security headers.
+- JSON request bodies are limited to 10 KB.
+- Login and registration have a stricter rate limit; the API also has a general
+  request limit.
+- Inputs are validated and updates accept only known task fields.
+- CORS is not enabled because the browser UI and API are served from the same
+  origin. Do not enable permissive CORS if deploying this configuration.
+- Compose exposes MongoDB only on the local loopback interface.
+- The base Compose configuration requires an explicitly supplied signing
+  secret; the local demo override supplies a clearly demo-only key. Never use
+  that override in a shared or public deployment.
+- The local Compose setup is for demonstration/development, not a production
+  deployment. Production needs managed secrets, TLS, database access controls,
+  monitoring, backups, and a deliberate deployment environment.
 
-- Đọc biến môi trường bằng `dotenv`.
-- Gọi hàm kết nối MongoDB.
-- Khởi động Express tại `PORT`, mặc định là `5000`.
-- Báo lỗi nếu port đang được sử dụng.
+## Verification
 
-### `backend/src/app.js`
-
-- Tạo Express application.
-- Bật đọc JSON request bằng `express.json()`.
-- Phục vụ thư mục `frontend`.
-- Khai báo endpoint `/api/health`.
-- Gắn task routes tại `/api/tasks`.
-- Gắn middleware 404 và error handler ở cuối.
-
-### `backend/src/config/db.js`
-
-Đọc `MONGODB_URI` và kết nối Mongoose tới MongoDB. Nếu biến này không tồn tại,
-backend sẽ dừng với lỗi cấu hình.
-
-### `backend/src/routes/task.routes.js`
-
-Định nghĩa route và validation:
-
-| Route | Controller | Chức năng |
-| --- | --- | --- |
-| `GET /` | `getTasks` | Lấy danh sách task |
-| `POST /` | `createTask` | Tạo task |
-| `PUT /:id` | `updateTask` | Cập nhật task |
-| `DELETE /:id` | `deleteTask` | Xóa task |
-
-Vì route được gắn dưới `/api/tasks`, các endpoint thực tế là
-`/api/tasks`, `/api/tasks/:id`.
-
-### `backend/src/controllers/task.controller.js`
-
-| Hàm | Trách nhiệm |
-| --- | --- |
-| `getTasks` | Lấy task và sắp xếp mới nhất trước |
-| `createTask` | Tạo task từ `title` |
-| `updateTask` | Cập nhật `title` và `status` |
-| `deleteTask` | Xóa task theo `_id` |
-
-### `backend/src/models/Task.js`
-
-Schema hiện tại chỉ có:
-
-```text
-title   String, bắt buộc, không được rỗng
-status  String, chỉ nhận todo hoặc done, mặc định todo
-```
-
-`timestamps: true` khiến Mongoose tự thêm `createdAt` và `updatedAt`.
-
-### Middleware
-
-`validate.middleware.js` trả lỗi `400` khi validation trong route thất bại.
-`error.middleware.js` xử lý route không tồn tại, lỗi Mongoose và lỗi server rồi
-trả JSON response thống nhất.
-
-## 5. MongoDB và Docker
-
-`docker-compose.yml` tạo container:
-
-```text
-personal-task-manager-mongodb
-```
-
-MongoDB lắng nghe ở `localhost:27017`. Dữ liệu được lưu trong Docker volume:
-
-```text
-personal-task-manager-data
-```
-
-MongoDB lưu document trong các file nội bộ ở `/data/db`; không có file riêng
-cho từng task. Muốn xem dữ liệu, dùng MongoDB Compass hoặc `mongosh`:
-
-```javascript
-use task_manager
-db.tasks.find().pretty()
-```
-
-## 6. Dữ liệu hợp lệ
-
-Tạo task cần body:
-
-```json
-{
-  "title": "Học MongoDB"
-}
-```
-
-Khi cập nhật, `title` nếu được gửi phải không rỗng và `status` phải là `todo`
-hoặc `done`. Với cập nhật và xóa, `:id` phải là MongoDB ObjectId hợp lệ.
-
-## 7. Những phần không thuộc ứng dụng chính
-
-- `learning/backend_project/` là project `json-server` riêng, dùng `db.json` và
-  chạy bằng `npm run dev` trong thư mục đó.
-- `learning/` chứa các bài tập JavaScript/DOM độc lập.
-- Các file này không được backend chính sử dụng và không cần chạy khi sử dụng
-  Personal Task Manager.
+API integration tests use a temporary MongoDB instance and cover authentication,
+password hashing, task CRUD, search/filter/pagination, validation, and user
+isolation. Frontend interaction tests cover auth state, error feedback, and
+date-only timezone rendering. CI runs tests and coverage reporting, lint, and
+formatting checks.

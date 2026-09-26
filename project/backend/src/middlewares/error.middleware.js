@@ -6,17 +6,7 @@ const notFound = (req, res) => {
 };
 
 const errorHandler = (err, req, res, next) => {
-  console.error(err);
-
-  if (err.name === 'MulterError') {
-    const message =
-      err.code === 'LIMIT_FILE_SIZE'
-        ? 'Avatar must be 2MB or smaller'
-        : 'Avatar must be a JPG, PNG, or WEBP image';
-
-    return res.status(400).json({ success: false, message });
-  }
-
+  if (res.headersSent) return next(err);
   if (err.name === 'ValidationError') {
     return res.status(400).json({
       success: false,
@@ -39,9 +29,24 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  return res.status(500).json({
+  if (err.type === 'entity.too.large') {
+    return res
+      .status(413)
+      .json({ success: false, message: 'Request body is too large' });
+  }
+
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res
+      .status(400)
+      .json({ success: false, message: 'Invalid JSON request body' });
+  }
+
+  const statusCode = err.statusCode || err.status || 500;
+  if (statusCode >= 500) console.error(err);
+
+  return res.status(statusCode).json({
     success: false,
-    message: 'Internal server error',
+    message: statusCode >= 500 ? 'Internal server error' : err.message,
   });
 };
 

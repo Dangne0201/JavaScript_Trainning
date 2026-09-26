@@ -1,9 +1,9 @@
-const Task = require('../models/Task');
+const taskService = require('../services/task.service');
 
 const getTasks = async (req, res, next) => {
   try {
-    const tasks = await Task.find().sort({ createdAt: -1 });
-    res.json({ success: true, data: tasks });
+    const result = await taskService.listTasks(req.user.id, req.query);
+    res.json({ success: true, ...result });
   } catch (error) {
     next(error);
   }
@@ -11,7 +11,7 @@ const getTasks = async (req, res, next) => {
 
 const createTask = async (req, res, next) => {
   try {
-    const task = await Task.create({ title: req.body.title });
+    const task = await taskService.createTask(req.user.id, req.body);
     res.status(201).json({ success: true, data: task });
   } catch (error) {
     next(error);
@@ -20,22 +20,11 @@ const createTask = async (req, res, next) => {
 
 const updateTask = async (req, res, next) => {
   try {
-    const task = await Task.findOneAndUpdate(
-      { _id: req.params.id },
-      { title: req.body.title, status: req.body.status },
-      {
-        new: true,
-        runValidators: true,
-      }
+    const task = await taskService.updateTask(
+      req.user.id,
+      req.params.id,
+      req.body,
     );
-
-    if (!task) {
-      return res.status(404).json({
-        success: false,
-        message: 'Task not found',
-      });
-    }
-
     res.json({ success: true, data: task });
   } catch (error) {
     next(error);
@@ -44,19 +33,8 @@ const updateTask = async (req, res, next) => {
 
 const deleteTask = async (req, res, next) => {
   try {
-    const task = await Task.findByIdAndDelete(req.params.id);
-
-    if (!task) {
-      return res.status(404).json({
-        success: false,
-        message: 'Task not found',
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Task deleted successfully',
-    });
+    await taskService.deleteTask(req.user.id, req.params.id);
+    res.json({ success: true, message: 'Task deleted successfully' });
   } catch (error) {
     next(error);
   }

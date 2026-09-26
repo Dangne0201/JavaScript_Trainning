@@ -1,102 +1,61 @@
-# Personal Task Manager
+# JavaScript Training
 
-Repository được chia thành hai nhóm lớn:
+This repository contains JavaScript exercises and a portfolio-ready full-stack
+application: **Personal Task Manager**.
 
-```text
-project/   Personal Task Manager đang chạy
-learning/  Các bài học và project luyện tập riêng
-```
+## Featured project
 
-Hướng dẫn chi tiết nằm trong
-[project/docs/HUONG_DAN_SU_DUNG.md](project/docs/HUONG_DAN_SU_DUNG.md), còn
-kiến trúc được giải thích trong
-[project/docs/GIAI_THICH_DU_AN.md](project/docs/GIAI_THICH_DU_AN.md).
+The application demonstrates:
 
-## Công nghệ
+- Username/password registration and login with hashed passwords and HTTP-only
+  authentication cookies.
+- Per-user task ownership, so users cannot view or modify another user's tasks.
+- Task workflows, priorities, due dates, and tags.
+- A validated REST API with pagination, search, filtering, and sorting.
+- A service/controller/model backend structure, automated API tests, security
+  middleware, Docker Compose, and GitHub Actions CI.
 
-- JavaScript thuần cho giao diện và logic
-- Node.js để chạy backend
-- Express.js để tạo API
-- MongoDB và Mongoose để lưu task
-- HTML và CSS tối giản, không dùng React hoặc Tailwind
+### Run the full application
 
-## Chức năng
-
-- Xem danh sách task
-- Thêm task
-- Đánh dấu task đã hoàn thành hoặc chưa hoàn thành
-- Xóa task
-
-## Chạy project chính
-
-Yêu cầu Git, Node.js, npm và Docker Desktop.
+For the local demo, only Git and Docker Desktop are required. Install and start
+Docker Desktop, then run these commands in PowerShell:
 
 ```powershell
 git clone https://github.com/Dangne0201/JavaScript_Trainning.git
 cd JavaScript_Trainning\project
-docker compose up -d
-
-cd backend
-Copy-Item .env.example .env
-npm install
-npm start
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
 ```
 
-Nếu PowerShell chặn `npm.ps1`, dùng `npm.cmd install` và `npm.cmd start`, hoặc
-chạy các lệnh npm trong Command Prompt. Trong Command Prompt, lệnh copy file là
-`copy .env.example .env`.
+Then open <http://localhost:5000> and create an account. No Node.js, `.env`
+setup, or separate MongoDB install is needed just to try the app. The demo
+signing key is local-only; do not expose the demo setup publicly. These clone
+instructions include this version only after the changes are pushed or merged
+to GitHub.
 
-Docker chạy MongoDB local ở `localhost:27017`. File `.env.example` đã có sẵn
-connection string phù hợp, nên chỉ cần copy thành `.env` rồi lưu lại. Không đổi
-tên thành `.env.txt`; file phải có đúng tên `.env`.
+To stop, press `Ctrl+C` and optionally run
+`docker compose -f docker-compose.yml -f docker-compose.demo.yml down` from
+`project/`. Task data persists in a Docker volume.
 
-Nếu port `5000` đã được dùng, hãy dừng backend cũ bằng `Ctrl + C` rồi chạy lại
-`npm start`.
-
-Mở giao diện tại:
-
-```text
-http://localhost:5000
-```
-
-Backend vẫn chạy trực tiếp bằng Node.js; Docker chỉ chạy MongoDB:
-
-```text
-Docker MongoDB → localhost:27017
-Node.js backend → localhost:5000
-```
-
-Khi muốn dừng MongoDB:
+### Run checks
 
 ```powershell
-docker compose down
+cd project\backend
+npm ci
+npm run lint
+npm run format:check
+npm run test:coverage
 ```
 
-Muốn dừng và xóa luôn dữ liệu MongoDB:
+## Project documentation
 
-```powershell
-docker compose down -v
-```
+- [Portfolio project overview and screenshot](project/README.md)
+- [Project setup and user guide](project/docs/HUONG_DAN_SU_DUNG.md)
+- [Architecture and design](project/docs/GIAI_THICH_DU_AN.md)
+- [REST API reference](project/docs/API.md)
 
-Backend phục vụ giao diện HTML trong thư mục `frontend` và cung cấp các API:
+To publish a verified Docker image to GitHub Container Registry, push a tag in
+the form `task-manager-v1.0.0`. The release workflow runs the quality checks
+before publishing; it does not deploy to a cloud host.
 
-| Method | Endpoint | Chức năng |
-| --- | --- | --- |
-| GET | `/api/tasks` | Lấy danh sách task |
-| POST | `/api/tasks` | Thêm task |
-| PUT | `/api/tasks/:id` | Đổi tên hoặc trạng thái task |
-| DELETE | `/api/tasks/:id` | Xóa task |
-
-Ví dụ dữ liệu task:
-
-```json
-{
-  "title": "Học JavaScript",
-  "status": "todo"
-}
-```
-
-## Các thư mục bài học khác
-
-Thư mục `learning/` chứa các bài tập JavaScript và project `json-server` riêng,
-không thuộc luồng chạy của Personal Task Manager.
+The `learning/` directory contains independent practice exercises and is not
+required to run the task manager.
