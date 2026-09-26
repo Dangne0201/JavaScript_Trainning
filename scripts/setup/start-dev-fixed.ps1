@@ -1,179 +1,239 @@
 param(
-    [string]$saPassword = "Your_password123"
+    [string]$saPassword
 )
 
-Write-Output "Starting development SQL Server container (docker compose up -d) using best available docker command..."
-
-# Determine docker command (PowerShell 5-compatible)
-$dockerCmd = $null
-$dockerCmdObj = Get-Command docker -ErrorAction SilentlyContinue
-if ($dockerCmdObj) {
-    $dockerCmd = $dockerCmdObj.Source
-} else {
-    $candidate = 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'
-    if (Test-Path $candidate) { $dockerCmd = $candidate }
+$ErrorActionPreference = "Stop"
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).ProviderPath
+if ([string]::IsNullOrWhiteSpace($saPassword)) {
+    $saPassword = [Environment]::GetEnvironmentVariable("SA_PASSWORD", "Process")
 }
-if (-not $dockerCmd) { Write-Error "Docker CLI not found. Please install Docker Desktop or add docker.exe to PATH."; exit 1 }
-
-# Determine compose command (prefer 'docker compose' if supported)
-$composeCmd = $null
-try { & $dockerCmd 'compose' 'version' > $null 2>&1; $composeCmd = @($dockerCmd, 'compose') } catch {
-    $composeExe = 'C:\Program Files\Docker\Docker\resources\bin\docker-compose.exe'
-    if (Test-Path $composeExe) { $composeCmd = @($composeExe) } else { $composeCmd = @($dockerCmd, 'compose') }
+if ([string]::IsNullOrWhiteSpace($saPassword)) {
+    throw "Set SA_PASSWORD or run setup-all.ps1, which securely prompts for it."
 }
 
-Write-Output "Running: docker compose up -d"
-# Export SA_PASSWORD into the environment so docker-compose can pick it up if compose file uses ${SA_PASSWORD}
-if ($saPassword) {
-    $env:SA_PASSWORD = $saPassword
-    Write-Output "Exported SA_PASSWORD environment variable for docker compose (hidden)."
-}
-if ($composeCmd -is [array] -and $composeCmd.Count -eq 1) {
-    & $composeCmd[0] 'up' '-d' '--force-recreate'
-} else {
-    & $composeCmd[0] $composeCmd[1] 'up' '-d' '--force-recreate'
+$docker = Get-Command docker -ErrorAction SilentlyContinue
+if (-not $docker) {
+    throw "Docker CLI not found. Install Docker Desktop and ensure docker is on PATH."
 }
 
-# Post-create: detect the named volume used for SQL Server data and attempt to fix ownership
-# if it appears owned by root or another UID (this commonly causes BootstrapSystemDataDirectories failures).
-try {
-    $container = "expense-mssql"
-    # Attempt to get the volume name mounted at /var/opt/mssql/data
-    $volName = & $dockerCmd 'inspect' $container '--format' '{{range .Mounts}}{{if eq .Destination "/var/opt/mssql/data"}}{{.Name}}{{end}}{{end}}' 2>$null
-    $volName = ($volName -join "").Trim()
-    if (-not [string]::IsNullOrWhiteSpace($volName)) {
-        Write-Output "Detected data volume: $volName. Checking ownership of master.mdf..."
-        # Use an ephemeral alpine container to inspect owner of master.mdf if present
-        $owner = & $dockerCmd 'run' '--rm' '-v' "${volName}:/var/opt/mssql/data" 'alpine' 'sh' '-c' "if [ -f /var/opt/mssql/data/master.mdf ]; then ls -ln /var/opt/mssql/data/master.mdf | awk '{print \$3}'; else echo 'MISSING'; fi" 2>$null
-        $owner = ($owner -join "").Trim()
-        if ($owner -and $owner -ne 'MISSING' -and $owner -ne '10001') {
-            Write-Output "master.mdf owner is '$owner' (expected 10001). Attempting to chown volume to 10001:10001..."
-            & $dockerCmd 'run' '--rm' '-v' "${volName}:/var/opt/mssql/data" 'alpine' 'sh' '-c' "chown -R 10001:10001 /var/opt/mssql/data || true"
-            Write-Output "Chown executed. You may still want to inspect docker logs if problems persist."
-        } elseif ($owner -eq 'MISSING') {
-            Write-Output "master.mdf not present yet; SQL Server will create system files during startup if permissions allow."
-        } else {
-            Write-Output "Data volume ownership looks OK (owner: $owner)."
+if (-not ("ExpenseTracker.Security.DpapiUserScope" -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+
+namespace ExpenseTracker.Security
+{
+    public static class DpapiUserScope
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct DataBlob
+        {
+            public int Length;
+            public IntPtr Data;
         }
-    } else {
-        Write-Output "Could not detect a named volume mounted at /var/opt/mssql/data for container $container; skipping ownership check."
-    }
-} catch {
-    Write-Output "Volume ownership check failed (non-fatal): $_"
-}
 
+        [DllImport("crypt32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool CryptProtectData(
+            ref DataBlob input,
+            string description,
+            IntPtr optionalEntropy,
+            IntPtr reserved,
+            IntPtr prompt,
+            uint flags,
+            out DataBlob output);
 
-$container = "expense-mssql"
-Write-Output "Waiting for SQL Server container '$container' to be ready..."
-$max = 60; $i = 0
+        [DllImport("crypt32.dll", SetLastError = true)]
+        private static extern bool CryptUnprotectData(
+            ref DataBlob input,
+            IntPtr description,
+            IntPtr optionalEntropy,
+            IntPtr reserved,
+            IntPtr prompt,
+            uint flags,
+            out DataBlob output);
 
-# prefer host sqlcmd if available (PowerShell 5-compatible)
-$hostSqlcmd = $null
-$hostSqlcmdObj = Get-Command sqlcmd -ErrorAction SilentlyContinue
-if ($hostSqlcmdObj) { $hostSqlcmd = $hostSqlcmdObj.Source }
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr LocalFree(IntPtr memory);
 
-while ($i -lt $max) {
-    if ($hostSqlcmd) {
-        try {
-            & $hostSqlcmd -S "localhost,1433" -U SA -P $saPassword -Q "SELECT 1" > $null 2>&1
-            Write-Output "SQL Server is ready (host sqlcmd)."
-            break
-        } catch {
-            Start-Sleep -Seconds 2
-            $i++
-            continue
+        public static byte[] Protect(byte[] input)
+        {
+            return Transform(input, true);
         }
-    } else {
-        try {
-            & $dockerCmd 'exec' $container '/opt/mssql-tools/bin/sqlcmd' '-S' 'localhost' '-U' 'SA' '-P' $saPassword '-Q' 'SELECT 1' > $null 2>&1
-            Write-Output "SQL Server is ready (container sqlcmd)."
-            break
-        } catch {
-            Start-Sleep -Seconds 2
-            $i++
-            continue
+
+        public static byte[] Unprotect(byte[] input)
+        {
+            return Transform(input, false);
         }
-    }
-}
 
-if ($i -ge $max) { Write-Error "SQL Server did not become ready in time (waited $($max*2) seconds)."; exit 1 }
+        private static byte[] Transform(byte[] input, bool protect)
+        {
+            var pinned = GCHandle.Alloc(input, GCHandleType.Pinned);
+            var inputBlob = new DataBlob { Length = input.Length, Data = pinned.AddrOfPinnedObject() };
+            DataBlob outputBlob;
+            try
+            {
+                var succeeded = protect
+                    ? CryptProtectData(ref inputBlob, null, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, out outputBlob)
+                    : CryptUnprotectData(ref inputBlob, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, 0, out outputBlob);
+                if (!succeeded)
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
 
-Write-Output "Initializing database (checking current state)..."
-# Determine repo root robustly: script can live at repo root or under scripts/setup.
-$repoRootCandidates = @(
-    $PSScriptRoot,
-    (Split-Path -Parent $PSScriptRoot),
-    (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
-)
-$repoRoot = $null
-$initPathHost = $null
-foreach ($candidateRoot in $repoRootCandidates) {
-    $path = Join-Path $candidateRoot 'data\init.sql'
-    if (Test-Path $path) {
-        $repoRoot = $candidateRoot
-        $initPathHost = $path
-        break
-    }
-}
-if (-not $repoRoot -or -not $initPathHost) {
-    $candidates = $repoRootCandidates | ForEach-Object { Join-Path $_ 'data\init.sql' }
-    Write-Error "Cannot find data\init.sql in expected locations: $($candidates -join '; ')"
-    exit 1
-}
-try { $initPathHost = (Resolve-Path $initPathHost -ErrorAction Stop).Path } catch { Write-Error "Cannot resolve init.sql path: $initPathHost"; exit 1 }
-
-# Helper to run a SQL command and return trimmed stdout
-function Invoke-SqlQuery([string]$query) {
-    if ($hostSqlcmd) {
-        $out = & $hostSqlcmd '-S' 'localhost,1433' '-U' 'SA' '-P' $saPassword '-Q' $query 2>&1
-    } else {
-        $out = & $dockerCmd 'exec' $container '/opt/mssql-tools/bin/sqlcmd' '-S' 'localhost' '-U' 'SA' '-P' $saPassword '-Q' $query 2>&1
-    }
-    return ($out -join "`n").Trim()
-}
-
-# Check if database already exists
-$checkDbQuery = "SET NOCOUNT ON; IF DB_ID('ExpenseDb') IS NOT NULL SELECT 1 ELSE SELECT 0"
-$checkOut = Invoke-SqlQuery $checkDbQuery
-if ($checkOut -match '1') {
-    Write-Output "Database 'ExpenseDb' already exists on server; skipping init."
-} else {
-    # If mdf exists in repo data folder, attempt to attach rather than create to avoid file-exists errors
-    $mdfHostPath = Join-Path $repoRoot 'data\ExpenseDb.mdf'
-    if (Test-Path $mdfHostPath) {
-        Write-Output "Detected existing data/ExpenseDb.mdf on host; attempting to attach it to SQL Server in container..."
-        $attachQuery = "CREATE DATABASE ExpenseDb ON (FILENAME = '/var/opt/mssql/data/ExpenseDb.mdf') FOR ATTACH"
-        $attachOut = Invoke-SqlQuery $attachQuery
-        if ($attachOut -match 'Msg') {
-            Write-Warning "Attach attempt returned messages: $attachOut"
-            Write-Output "Falling back to running init.sql script."
-            if ($hostSqlcmd) {
-                Write-Output "Using host sqlcmd to run init.sql: $initPathHost"
-                & $hostSqlcmd '-S' 'localhost,1433' '-U' 'SA' '-P' $saPassword '-i' $initPathHost
-            } else {
-                Write-Output "Copying init.sql into container and executing via container sqlcmd"
-                & $dockerCmd 'cp' $initPathHost ("${container}:/init.sql")
-                & $dockerCmd 'exec' '-i' $container '/opt/mssql-tools/bin/sqlcmd' '-S' 'localhost' '-U' 'SA' '-P' $saPassword '-i' '/init.sql'
+                var output = new byte[outputBlob.Length];
+                try
+                {
+                    Marshal.Copy(outputBlob.Data, output, 0, output.Length);
+                }
+                finally
+                {
+                    LocalFree(outputBlob.Data);
+                }
+                return output;
             }
-        } else {
-            Write-Output "Attach succeeded or produced no error messages: $attachOut"
-        }
-    } else {
-        # No mdf to attach; run init.sql as usual
-        if ($hostSqlcmd) {
-            Write-Output "Using host sqlcmd to run init.sql: $initPathHost"
-            & $hostSqlcmd '-S' 'localhost,1433' '-U' 'SA' '-P' $saPassword '-i' $initPathHost
-        } else {
-            Write-Output "Copying init.sql into container and executing via container sqlcmd"
-            & $dockerCmd 'cp' $initPathHost ("${container}:/init.sql")
-            & $dockerCmd 'exec' '-i' $container '/opt/mssql-tools/bin/sqlcmd' '-S' 'localhost' '-U' 'SA' '-P' $saPassword '-i' '/init.sql'
+            finally
+            {
+                pinned.Free();
+            }
         }
     }
 }
+'@
+}
 
-Write-Output "Database initialization complete."
-$defaultSqlConn = "Server=localhost,1433;Database=ExpenseDb;User Id=sa;Password=$saPassword;Encrypt=False;TrustServerCertificate=True;"
-$env:SQL_CONN = $defaultSqlConn
-Write-Output "Set SQL_CONN for this session to a Docker-safe local connection string."
-Write-Output "You can now run the WinForms app. If you want to reuse it in another shell, set the environment variable SQL_CONN with a connection string, for example:"
-Write-Output "  SQL_CONN='Server=localhost,1433;Database=ExpenseDb;User Id=sa;Password=Your_password123;Encrypt=False;TrustServerCertificate=True;'"
+$originalSaPassword = [Environment]::GetEnvironmentVariable("SA_PASSWORD", "Process")
+$env:SA_PASSWORD = $saPassword
+try {
+& $docker.Source compose --project-directory $repoRoot up -d
+if ($LASTEXITCODE -ne 0) {
+    throw "docker compose up failed."
+}
+
+$ready = $false
+$sqlcmd = $null
+for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    foreach ($candidate in @("/opt/mssql-tools/bin/sqlcmd", "/opt/mssql-tools18/bin/sqlcmd")) {
+        & $docker.Source compose --project-directory $repoRoot exec -T mssql test -x $candidate 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $sqlcmd = $candidate
+            break
+        }
+    }
+
+    if ($sqlcmd) {
+        & $docker.Source compose --project-directory $repoRoot exec -T `
+            -e "SQLCMDPASSWORD=$saPassword" mssql $sqlcmd -S localhost -U sa -Q "SELECT 1" -C -b 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $ready = $true
+            break
+        }
+    }
+    Start-Sleep -Seconds 2
+}
+if (-not $ready) {
+    throw "SQL Server did not become ready. Check 'docker compose logs mssql'; existing volumes are left untouched."
+}
+
+$databaseCheck = & $docker.Source compose --project-directory $repoRoot exec -T `
+    -e "SQLCMDPASSWORD=$saPassword" mssql $sqlcmd -S localhost -U sa `
+-Q "SET NOCOUNT ON; SELECT CASE WHEN DB_ID('ExpenseDb') IS NULL THEN 0 ELSE 1 END" -C -b
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not check whether ExpenseDb exists."
+}
+if (($databaseCheck -join "`n") -match "(?m)^\s*0\s*$") {
+    & $docker.Source compose --project-directory $repoRoot exec -T `
+        -e "SQLCMDPASSWORD=$saPassword" mssql $sqlcmd -S localhost -U sa `
+        -i /init/init.sql -C -b
+    if ($LASTEXITCODE -ne 0) {
+        throw "Database initialization failed. Existing volume data was not deleted."
+    }
+    Write-Host "ExpenseDb initialized from data/init.sql."
+}
+else {
+    Write-Host "ExpenseDb already exists; existing database data was preserved."
+}
+
+$credentialFolder = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "ExpenseTracker"
+$credentialFile = Join-Path $credentialFolder "app-db-password.bin"
+if (Test-Path $credentialFile) {
+    try {
+        $protectedPassword = [IO.File]::ReadAllBytes($credentialFile)
+        $appPasswordBytes = [ExpenseTracker.Security.DpapiUserScope]::Unprotect($protectedPassword)
+        $appPassword = [Text.Encoding]::UTF8.GetString($appPasswordBytes)
+    }
+    catch {
+        throw "Could not read this Windows user's protected app credential. Preserve the database volume and credential file; investigate the local Windows profile before recovery."
+    }
+}
+else {
+    $randomBytes = New-Object byte[] 24
+    $randomGenerator = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $randomGenerator.GetBytes($randomBytes)
+    }
+    finally {
+        $randomGenerator.Dispose()
+    }
+    $passwordAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+    $appPassword = "Aa7" + (-join ($randomBytes | ForEach-Object {
+        $passwordAlphabet[[int]$_ % $passwordAlphabet.Length]
+    }))
+    $protectedPassword = [ExpenseTracker.Security.DpapiUserScope]::Protect(
+        [Text.Encoding]::UTF8.GetBytes($appPassword))
+    New-Item $credentialFolder -ItemType Directory -Force | Out-Null
+    [IO.File]::WriteAllBytes($credentialFile, $protectedPassword)
+}
+
+$provisionSql = @"
+IF SUSER_ID(N'ExpenseApp') IS NULL
+    CREATE LOGIN [ExpenseApp] WITH PASSWORD = N'$appPassword', CHECK_POLICY = ON;
+ELSE
+    ALTER LOGIN [ExpenseApp] WITH PASSWORD = N'$appPassword', CHECK_POLICY = ON;
+GO
+USE [ExpenseDb];
+IF USER_ID(N'ExpenseApp') IS NULL
+    CREATE USER [ExpenseApp] FOR LOGIN [ExpenseApp];
+ELSE
+    ALTER USER [ExpenseApp] WITH LOGIN = [ExpenseApp];
+GO
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.database_role_members drm
+    JOIN sys.database_principals rolePrincipal ON rolePrincipal.principal_id = drm.role_principal_id
+    JOIN sys.database_principals memberPrincipal ON memberPrincipal.principal_id = drm.member_principal_id
+    WHERE rolePrincipal.name = N'db_datareader' AND memberPrincipal.name = N'ExpenseApp')
+    ALTER ROLE [db_datareader] ADD MEMBER [ExpenseApp];
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.database_role_members drm
+    JOIN sys.database_principals rolePrincipal ON rolePrincipal.principal_id = drm.role_principal_id
+    JOIN sys.database_principals memberPrincipal ON memberPrincipal.principal_id = drm.member_principal_id
+    WHERE rolePrincipal.name = N'db_datawriter' AND memberPrincipal.name = N'ExpenseApp')
+    ALTER ROLE [db_datawriter] ADD MEMBER [ExpenseApp];
+GO
+"@
+$provisionSql | & $docker.Source compose --project-directory $repoRoot exec -T `
+    -e "SQLCMDPASSWORD=$saPassword" mssql $sqlcmd -S localhost -U sa -C -b
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not configure the restricted ExpenseApp database login."
+}
+
+$connectionBuilder = New-Object System.Data.Common.DbConnectionStringBuilder
+$connectionBuilder["Data Source"] = "localhost,1433"
+$connectionBuilder["Initial Catalog"] = "ExpenseDb"
+$connectionBuilder["User ID"] = "ExpenseApp"
+$connectionBuilder["Password"] = $appPassword
+$connectionBuilder["Encrypt"] = $false
+$connectionBuilder["TrustServerCertificate"] = $true
+$env:SQL_CONN = $connectionBuilder.ConnectionString
+Write-Host "Configured the ExpenseApp login with database reader/writer permissions."
+}
+finally {
+    if ([string]::IsNullOrEmpty($originalSaPassword)) {
+        Remove-Item Env:SA_PASSWORD -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:SA_PASSWORD = $originalSaPassword
+    }
+}

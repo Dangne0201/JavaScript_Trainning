@@ -16,6 +16,13 @@ BEGIN
 END
 GO
 
+IF NOT EXISTS (SELECT 1 FROM dbo.Categories)
+BEGIN
+    INSERT INTO dbo.Categories (Name)
+    VALUES (N'Food'), (N'Transport'), (N'Bills'), (N'Other');
+END
+GO
+
 IF OBJECT_ID('dbo.Expenses','U') IS NULL
 BEGIN
     CREATE TABLE dbo.Expenses(

@@ -15,6 +15,6 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 & dotnet build (Join-Path $repoRoot 'ExpenseTracker.sln') -c $Configuration
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
-# Run tests (only unit tests if test project contains both, you can filter later)
-& dotnet test (Join-Path $repoRoot 'src\ExpenseTracker.Tests') -c $Configuration --no-build --verbosity minimal
+# Run only database-independent tests.
+& dotnet test (Join-Path $repoRoot 'src\ExpenseTracker.Tests') -c $Configuration --no-build --filter "Category!=Integration" --verbosity minimal
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

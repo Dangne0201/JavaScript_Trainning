@@ -25,6 +25,8 @@ obj/
 
 # Logs
 *.log
+TestResults/
+**/TestResults/
 
 # OS files
 Thumbs.db
@@ -43,4 +45,3 @@ data/*.ldf
 sqlconn.txt
 src\ExpenseTracker.WinForms\bin\Debug\net10.0-windows\sqlconn.txt
 src\ExpenseTracker.WinForms\bin\Release\net10.0-windows\publish\sqlconn.txt
-

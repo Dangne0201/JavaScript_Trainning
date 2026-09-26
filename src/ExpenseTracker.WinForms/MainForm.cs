@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.Drawing;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
 using Microsoft.Data.SqlClient;
@@ -10,13 +11,14 @@ namespace ExpenseTracker.WinForms
 {
     /// <summary>
     /// Main screen for the expense tracker.
-    /// It loads categories and expenses, allows inserts/deletes, and resolves the database connection
-    /// using SQL_CONN first, then falling back to LocalDB + repository MDF if needed.
+    /// It loads categories and expenses, supports expense CRUD, and resolves the database connection
+    /// using SQL_CONN first, then falling back to LocalDB + repository MDF for legacy use.
     /// </summary>
     public class MainForm : Form
     {
         // Active connection string. This is chosen once during startup and reused for all CRUD actions.
         private string _conn;
+        private ExpenseRepository _repository;
 
         // Legacy LocalDB fallbacks kept for compatibility when the DB is not running in Docker.
         private readonly string _connPrimary = @"Server=(localdb)\MSSQLLocalDB;Database=ExpenseDb;Trusted_Connection=True;";
@@ -34,12 +36,20 @@ namespace ExpenseTracker.WinForms
         private TextBox txtNote;
         private Button btnAddExpense;
         private Button btnDeleteExpense;
+        private bool _isEditingExpense;
+        private int _editingExpenseId;
 
         public MainForm()
         {
             // Resolve DB connectivity before building the form; the rest of the UI depends on it.
             EnsureDatabaseAvailable();
+            _repository = new ExpenseRepository(_conn);
             InitializeComponents();
+            Shown += (s, e) =>
+            {
+                LoadCategories();
+                LoadExpenses();
+            };
         }
 
         private void InitializeComponents()
@@ -53,6 +63,15 @@ namespace ExpenseTracker.WinForms
             MaximumSize = MinimumSize;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
+            KeyPreview = true;
+            KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Escape && _isEditingExpense)
+                {
+                    ResetExpenseEditor();
+                    e.Handled = true;
+                }
+            };
 
             // Root layout: left panel for categories, right panel for expenses.
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
@@ -73,6 +92,8 @@ namespace ExpenseTracker.WinForms
                 Dock = DockStyle.Fill,
                 ReadOnly = true,
                 AllowUserToAddRows = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                MultiSelect = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
                 ScrollBars = ScrollBars.Both,
                 RowHeadersVisible = false,
@@ -150,7 +171,7 @@ namespace ExpenseTracker.WinForms
 
             btnDeleteExpense = new Button { Text = "Delete Expense", AutoSize = false, Width = 200, Height = 44, Padding = new Padding(4), Margin = new Padding(12), Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter, UseCompatibleTextRendering = true };
             var btnLoadExpenses = new Button { Text = "Load Expenses", AutoSize = false, Width = 200, Height = 44, Padding = new Padding(4), Margin = new Padding(12), Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter, UseCompatibleTextRendering = true };
-            btnAddExpense = new Button { Text = "Add Expenses", AutoSize = false, Width = 200, Height = 44, Padding = new Padding(4), Margin = new Padding(12), Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter, UseCompatibleTextRendering = true };
+            btnAddExpense = new Button { Text = "Add Expense", AutoSize = false, Width = 200, Height = 44, Padding = new Padding(4), Margin = new Padding(12), Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter, UseCompatibleTextRendering = true };
 
             footerRightTable.Controls.Add(btnDeleteExpense, 1, 1);
             footerRightTable.Controls.Add(btnLoadExpenses, 2, 1);
@@ -159,6 +180,13 @@ namespace ExpenseTracker.WinForms
             btnAddExpense.Click += (s, e) => AddExpense();
             btnLoadExpenses.Click += (s, e) => LoadExpenses();
             btnDeleteExpense.Click += (s, e) => DeleteSelectedExpense();
+            dgvExpenses.CellDoubleClick += (s, e) =>
+            {
+                if (e.RowIndex >= 0)
+                {
+                    BeginEditSelectedExpense();
+                }
+            };
 
             footerRight.Controls.Add(footerRightTable);
 
@@ -203,23 +231,13 @@ namespace ExpenseTracker.WinForms
                     System.Threading.Thread.Sleep(2000);
                 }
 
-                MessageBox.Show("SQL_CONN is set but the app failed to connect using it. Please check the connection string and ensure the DB is reachable.");
-            }
-
-            var defaultDockerConn = GetDefaultDockerConnectionString();
-            if (!string.IsNullOrWhiteSpace(defaultDockerConn))
-            {
-                const int maxRetries = 6;
-                for (int attempt = 0; attempt < maxRetries; attempt++)
-                {
-                    if (TryOpenConnection(defaultDockerConn))
-                    {
-                        _conn = defaultDockerConn;
-                        return;
-                    }
-
-                    System.Threading.Thread.Sleep(2000);
-                }
+                _conn = envConn;
+                MessageBox.Show(
+                    "The configured database is unavailable. Check the connection and try again.",
+                    "Database unavailable",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return;
             }
 
             var mdfPath = FindDataMdf();
@@ -265,28 +283,23 @@ namespace ExpenseTracker.WinForms
             }
 
             _conn = _connPrimary;
-            MessageBox.Show("Could not automatically connect to LocalDB. Please ensure MSSQLLocalDB is installed and running (run 'sqllocaldb start MSSQLLocalDB'), or place data\\ExpenseDb.mdf next to the app and try again.");
+            MessageBox.Show(
+                "No database connection is available. Start Docker SQL Server or configure LocalDB, then restart the app.",
+                "Database unavailable",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
         }
 
         private string GetConnectionStringFromEnvironment()
         {
             // Prefer the process-level environment variable, because this is what setup scripts set.
             var envConn = Environment.GetEnvironmentVariable("SQL_CONN");
-            if (!string.IsNullOrWhiteSpace(envConn))
-            {
-                return NormalizeConnectionStringForLocalSql(envConn);
-            }
-
-            // Fallback to the user-level variable if the app was started from a shell that persisted it.
-            try
-            {
-                var userConn = Environment.GetEnvironmentVariable("SQL_CONN", EnvironmentVariableTarget.User);
-                return string.IsNullOrWhiteSpace(userConn) ? null : NormalizeConnectionStringForLocalSql(userConn);
-            }
-            catch
+            if (string.IsNullOrWhiteSpace(envConn))
             {
                 return null;
             }
+
+            return NormalizeConnectionStringForLocalSql(envConn);
         }
 
         private static string NormalizeConnectionStringForLocalSql(string connectionString)
@@ -296,55 +309,12 @@ namespace ExpenseTracker.WinForms
                 return connectionString;
             }
 
-            var parts = connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries);
-            var normalized = new System.Collections.Generic.List<string>();
-            var seenEncrypt = false;
-            var seenTrust = false;
-
-            foreach (var part in parts)
+            var builder = new SqlConnectionStringBuilder(connectionString)
             {
-                var trimmed = part.Trim();
-                if (string.IsNullOrWhiteSpace(trimmed))
-                {
-                    continue;
-                }
-
-                var key = trimmed.Split('=')[0].Trim();
-                if (string.Equals(key, "Encrypt", StringComparison.OrdinalIgnoreCase))
-                {
-                    normalized.Add("Encrypt=False");
-                    seenEncrypt = true;
-                    continue;
-                }
-
-                if (string.Equals(key, "TrustServerCertificate", StringComparison.OrdinalIgnoreCase))
-                {
-                    normalized.Add("TrustServerCertificate=True");
-                    seenTrust = true;
-                    continue;
-                }
-
-                normalized.Add(trimmed);
-            }
-
-            if (!seenEncrypt) normalized.Add("Encrypt=False");
-            if (!seenTrust) normalized.Add("TrustServerCertificate=True");
-
-            return string.Join(";", normalized) + ";";
-        }
-
-        private string GetDefaultDockerConnectionString()
-        {
-            // The project ships with Docker-based SQL Server as the default dev setup.
-            // This allows a direct double-click/Explorer launch to work when SQL_CONN is not set,
-            // as long as the Docker container is running (default password from the project setup scripts).
-            var password = Environment.GetEnvironmentVariable("SA_PASSWORD");
-            if (string.IsNullOrWhiteSpace(password))
-            {
-                password = "Your_password123";
-            }
-
-            return $"Server=localhost,1433;Database=ExpenseDb;User Id=sa;Password={password};Encrypt=False;TrustServerCertificate=True;";
+                Encrypt = false,
+                TrustServerCertificate = true
+            };
+            return builder.ConnectionString;
         }
 
         /// <summary>
@@ -367,8 +337,11 @@ namespace ExpenseTracker.WinForms
                     if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
 
                     var logFile = Path.Combine(logDir, "startup.log");
-                    var sanitized = SanitizeConnectionString(connStr);
-                    var line = $"[{DateTime.UtcNow:O}] TryOpenConnection failed. Conn={sanitized}; Error={ex.Message}{Environment.NewLine}";
+                    var errorType = ex.GetType().Name;
+                    var sqlError = ex is SqlException sqlException
+                        ? $"; SqlError={sqlException.Number}"
+                        : string.Empty;
+                    var line = $"[{DateTime.UtcNow:O}] TryOpenConnection failed. ErrorType={errorType}{sqlError}{Environment.NewLine}";
                     File.AppendAllText(logFile, line);
                 }
                 catch
@@ -444,44 +417,34 @@ namespace ExpenseTracker.WinForms
         {
             try
             {
-                using var conn = new SqlConnection(_conn);
-                using var cmd = new SqlCommand("SELECT Id, Name FROM Categories ORDER BY Name", conn);
-                var dt = new DataTable();
-                using var da = new SqlDataAdapter(cmd);
-                da.Fill(dt);
-
                 lstCategories.DisplayMember = "Name";
                 lstCategories.ValueMember = "Id";
-                lstCategories.DataSource = dt;
+                lstCategories.DataSource = _repository.GetCategories();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("LoadCategories error: " + ex.Message);
+                ShowDatabaseError("Loading categories", ex);
             }
         }
 
         private void AddCategory()
         {
             var name = txtNewCategory.Text.Trim();
-            if (string.IsNullOrEmpty(name))
+            if (!ExpenseValidation.IsValidCategoryName(name))
             {
-                MessageBox.Show("Enter category name");
+                MessageBox.Show("Enter a category name with at most 200 characters.");
                 return;
             }
 
             try
             {
-                using var conn = new SqlConnection(_conn);
-                using var cmd = new SqlCommand("INSERT INTO Categories (Name) VALUES (@name)", conn);
-                cmd.Parameters.AddWithValue("@name", name);
-                conn.Open();
-                cmd.ExecuteNonQuery();
+                _repository.AddCategory(name);
                 txtNewCategory.Text = "";
                 LoadCategories();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("AddCategory error: " + ex.Message);
+                ShowDatabaseError("Adding category", ex);
             }
         }
 
@@ -492,15 +455,7 @@ namespace ExpenseTracker.WinForms
         {
             try
             {
-                using var conn = new SqlConnection(_conn);
-                using var cmd = new SqlCommand(@"SELECT e.Id, e.Amount, e.Date, e.Note, e.CategoryId, c.Name AS CategoryName
-FROM Expenses e
-JOIN Categories c ON e.CategoryId = c.Id
-ORDER BY e.Id ASC", conn);
-
-                var dt = new DataTable();
-                using var da = new SqlDataAdapter(cmd);
-                da.Fill(dt);
+                var dt = _repository.GetExpenses();
 
                 if (dt.Rows.Count > 0)
                 {
@@ -526,7 +481,7 @@ ORDER BY e.Id ASC", conn);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("LoadExpenses error: " + ex.Message);
+                ShowDatabaseError("Loading expenses", ex);
             }
         }
 
@@ -544,9 +499,9 @@ ORDER BY e.Id ASC", conn);
                 return;
             }
 
-            if (!decimal.TryParse(txtAmount.Text.Trim(), out var amount))
+            if (!ExpenseValidation.TryParseAmount(txtAmount.Text, out var amount))
             {
-                MessageBox.Show("Invalid amount");
+                MessageBox.Show($"Enter an amount greater than zero and no more than {ExpenseValidation.MaxAmount:N2}.");
                 return;
             }
 
@@ -557,21 +512,21 @@ ORDER BY e.Id ASC", conn);
 
             try
             {
-                using var conn = new SqlConnection(_conn);
-                using var cmd = new SqlCommand("INSERT INTO Expenses (Amount, Date, Note, CategoryId) VALUES (@amt, @dt, @note, @cat)", conn);
-                cmd.Parameters.AddWithValue("@amt", amount);
-                cmd.Parameters.AddWithValue("@dt", date);
-                cmd.Parameters.AddWithValue("@note", string.IsNullOrEmpty(note) ? (object)DBNull.Value : note);
-                cmd.Parameters.AddWithValue("@cat", categoryId);
-                conn.Open();
-                cmd.ExecuteNonQuery();
-                txtAmount.Text = "";
-                txtNote.Text = "";
+                if (_isEditingExpense)
+                {
+                    _repository.UpdateExpense(_editingExpenseId, amount, date, note, categoryId);
+                }
+                else
+                {
+                    _repository.AddExpense(amount, date, note, categoryId);
+                }
+
+                ResetExpenseEditor();
                 LoadExpenses();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("AddExpense error: " + ex.Message);
+                ShowDatabaseError(_isEditingExpense ? "Updating expense" : "Adding expense", ex);
             }
         }
 
@@ -586,24 +541,66 @@ ORDER BY e.Id ASC", conn);
             try
             {
                 var idObj = dgvExpenses.CurrentRow.Cells["Id"].Value;
-                if (idObj == null)
+                if (idObj == null || idObj == DBNull.Value)
                 {
                     MessageBox.Show("Selected row has no Id.");
                     return;
                 }
 
                 var id = Convert.ToInt32(idObj);
-                using var conn = new SqlConnection(_conn);
-                using var cmd = new SqlCommand("DELETE FROM Expenses WHERE Id = @id", conn);
-                cmd.Parameters.AddWithValue("@id", id);
-                conn.Open();
-                cmd.ExecuteNonQuery();
+                _repository.DeleteExpense(id);
+                if (_isEditingExpense && id == _editingExpenseId)
+                {
+                    ResetExpenseEditor();
+                }
                 LoadExpenses();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("DeleteExpense error: " + ex.Message);
+                ShowDatabaseError("Deleting expense", ex);
             }
+        }
+
+        private static void ShowDatabaseError(string operation, Exception exception)
+        {
+            var detail = exception is SqlException sqlException
+                ? $"SQL error {sqlException.Number}"
+                : exception.GetType().Name;
+            MessageBox.Show(
+                $"{operation} failed ({detail}). Check that the database is available and try again.",
+                "Database error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+
+        private void BeginEditSelectedExpense()
+        {
+            var currentRow = dgvExpenses.CurrentRow;
+            if (currentRow == null || currentRow.Cells["Id"].Value == null ||
+                currentRow.Cells["Id"].Value == DBNull.Value)
+            {
+                return;
+            }
+
+            var row = (DataRowView)currentRow.DataBoundItem;
+            _editingExpenseId = Convert.ToInt32(row["Id"]);
+            txtAmount.Text = Convert.ToDecimal(row["Amount"]).ToString(CultureInfo.CurrentCulture);
+            dtpDate.Value = Convert.ToDateTime(row["Date"]);
+            txtNote.Text = row["Note"] == DBNull.Value
+                ? string.Empty
+                : Convert.ToString(row["Note"]);
+            lstCategories.SelectedValue = Convert.ToInt32(row["CategoryId"]);
+            _isEditingExpense = true;
+            btnAddExpense.Text = "Save Changes";
+        }
+
+        private void ResetExpenseEditor()
+        {
+            _isEditingExpense = false;
+            _editingExpenseId = 0;
+            btnAddExpense.Text = "Add Expense";
+            txtAmount.Clear();
+            txtNote.Clear();
         }
     }
 }

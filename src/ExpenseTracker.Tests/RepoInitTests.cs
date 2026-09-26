@@ -10,7 +10,7 @@ namespace ExpenseTracker.Tests
         {
             // Robustly find data/init.sql by walking upward from current directory
             var dir = Directory.GetCurrentDirectory();
-            string found = null;
+            string? found = null;
             while (!string.IsNullOrEmpty(dir))
             {
                 var candidate = Path.Combine(dir, "data", "init.sql");
@@ -19,7 +19,7 @@ namespace ExpenseTracker.Tests
                 dir = parent?.FullName;
             }
             Assert.False(string.IsNullOrEmpty(found), "init.sql not found in repository (searched upward from current dir)");
-            var text = File.ReadAllText(found);
+            var text = File.ReadAllText(found!);
             Assert.Contains("CREATE TABLE dbo.Categories", text);
             Assert.Contains("CREATE TABLE dbo.Expenses", text);
         }
