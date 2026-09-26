@@ -103,7 +103,9 @@ namespace ExpenseTracker.Security
 }
 
 $originalSaPassword = [Environment]::GetEnvironmentVariable("SA_PASSWORD", "Process")
+$originalSqlcmdPassword = [Environment]::GetEnvironmentVariable("SQLCMDPASSWORD", "Process")
 $env:SA_PASSWORD = $saPassword
+$env:SQLCMDPASSWORD = $saPassword
 try {
 & $docker.Source compose --project-directory $repoRoot up -d
 if ($LASTEXITCODE -ne 0) {
@@ -123,7 +125,7 @@ for ($attempt = 0; $attempt -lt 60; $attempt++) {
 
     if ($sqlcmd) {
         & $docker.Source compose --project-directory $repoRoot exec -T `
-            -e "SQLCMDPASSWORD=$saPassword" mssql $sqlcmd -S localhost -U sa -Q "SELECT 1" -C -b 2>$null
+            -e SQLCMDPASSWORD mssql $sqlcmd -S localhost -U sa -Q "SELECT 1" -C -b 2>$null
         if ($LASTEXITCODE -eq 0) {
             $ready = $true
             break
@@ -136,14 +138,14 @@ if (-not $ready) {
 }
 
 $databaseCheck = & $docker.Source compose --project-directory $repoRoot exec -T `
-    -e "SQLCMDPASSWORD=$saPassword" mssql $sqlcmd -S localhost -U sa `
+    -e SQLCMDPASSWORD mssql $sqlcmd -S localhost -U sa `
 -Q "SET NOCOUNT ON; SELECT CASE WHEN DB_ID('ExpenseDb') IS NULL THEN 0 ELSE 1 END" -C -b
 if ($LASTEXITCODE -ne 0) {
     throw "Could not check whether ExpenseDb exists."
 }
 if (($databaseCheck -join "`n") -match "(?m)^\s*0\s*$") {
     & $docker.Source compose --project-directory $repoRoot exec -T `
-        -e "SQLCMDPASSWORD=$saPassword" mssql $sqlcmd -S localhost -U sa `
+        -e SQLCMDPASSWORD mssql $sqlcmd -S localhost -U sa `
         -i /init/init.sql -C -b
     if ($LASTEXITCODE -ne 0) {
         throw "Database initialization failed. Existing volume data was not deleted."
@@ -214,7 +216,7 @@ IF NOT EXISTS (
 GO
 "@
 $provisionSql | & $docker.Source compose --project-directory $repoRoot exec -T `
-    -e "SQLCMDPASSWORD=$saPassword" mssql $sqlcmd -S localhost -U sa -C -b
+    -e SQLCMDPASSWORD mssql $sqlcmd -S localhost -U sa -C -b
 if ($LASTEXITCODE -ne 0) {
     throw "Could not configure the restricted ExpenseApp database login."
 }
@@ -235,5 +237,11 @@ finally {
     }
     else {
         $env:SA_PASSWORD = $originalSaPassword
+    }
+    if ([string]::IsNullOrEmpty($originalSqlcmdPassword)) {
+        Remove-Item Env:SQLCMDPASSWORD -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:SQLCMDPASSWORD = $originalSqlcmdPassword
     }
 }

@@ -68,16 +68,18 @@ public class DbIntegrationTests
         insertCommand.Parameters.Add("@categoryId", SqlDbType.Int).Value = categoryId;
         Assert.Equal(1, insertCommand.ExecuteNonQuery());
 
-        using var readCommand = new SqlCommand(
-            "SELECT Amount, Note, CategoryId FROM Expenses WHERE CategoryId = @categoryId ORDER BY Id DESC",
-            connection,
-            transaction);
-        readCommand.Parameters.Add("@categoryId", SqlDbType.Int).Value = categoryId;
-        using var reader = readCommand.ExecuteReader();
-        Assert.True(reader.Read());
-        Assert.Equal(123.45m, reader.GetDecimal(0));
-        Assert.Equal("integration-test", reader.GetString(1));
-        Assert.Equal(categoryId, reader.GetInt32(2));
+        using (var readCommand = new SqlCommand(
+                   "SELECT Amount, Note, CategoryId FROM Expenses WHERE CategoryId = @categoryId ORDER BY Id DESC",
+                   connection,
+                   transaction))
+        {
+            readCommand.Parameters.Add("@categoryId", SqlDbType.Int).Value = categoryId;
+            using var reader = readCommand.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal(123.45m, reader.GetDecimal(0));
+            Assert.Equal("integration-test", reader.GetString(1));
+            Assert.Equal(categoryId, reader.GetInt32(2));
+        }
 
         transaction.Rollback();
     }

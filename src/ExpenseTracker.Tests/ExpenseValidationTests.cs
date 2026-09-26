@@ -1,3 +1,4 @@
+using System.Globalization;
 using ExpenseTracker.WinForms;
 using Xunit;
 
@@ -5,13 +6,22 @@ namespace ExpenseTracker.Tests;
 
 public class ExpenseValidationTests
 {
-    [Theory]
-    [InlineData("12.50")]
-    [InlineData("1,234.56")]
-    public void TryParseAmount_accepts_positive_current_culture_values(string input)
+    [Fact]
+    public void TryParseAmount_accepts_positive_values_in_current_culture()
     {
-        Assert.True(ExpenseValidation.TryParseAmount(input, out var amount));
-        Assert.True(amount > 0);
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+            Assert.True(ExpenseValidation.TryParseAmount("12.50", out var amount));
+            Assert.Equal(12.50m, amount);
+            Assert.True(ExpenseValidation.TryParseAmount("1,234.56", out amount));
+            Assert.Equal(1234.56m, amount);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     [Theory]

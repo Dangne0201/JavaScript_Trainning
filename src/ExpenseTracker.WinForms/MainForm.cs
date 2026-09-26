@@ -1,7 +1,7 @@
 using System;
 using System.Data;
-using System.Drawing;
 using System.Diagnostics;
+using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
@@ -20,9 +20,10 @@ namespace ExpenseTracker.WinForms
         private string _conn;
         private ExpenseRepository _repository;
 
-        // Legacy LocalDB fallbacks kept for compatibility when the DB is not running in Docker.
-        private readonly string _connPrimary = @"Server=(localdb)\MSSQLLocalDB;Database=ExpenseDb;Trusted_Connection=True;";
-        private readonly string _connAttachTemplate = @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename={0};Integrated Security=True;Connect Timeout=30;";
+        private const string LocalDbConnectionString =
+            @"Server=(localdb)\MSSQLLocalDB;Database=ExpenseDb;Trusted_Connection=True;";
+        private const string LocalDbAttachConnectionTemplate =
+            @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename={0};Integrated Security=True;Connect Timeout=30;";
 
         // UI controls.
         private ListBox lstCategories;
@@ -100,6 +101,14 @@ namespace ExpenseTracker.WinForms
                 ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
                 AllowUserToResizeColumns = true,
                 AllowUserToResizeRows = false
+            };
+            dgvExpenses.CellFormatting += (s, e) =>
+            {
+                if (e.RowIndex >= 0 && e.ColumnIndex >= 0 &&
+                    dgvExpenses.Columns[e.ColumnIndex].Name == "Amount")
+                {
+                    e.CellStyle.Format = "N2";
+                }
             };
 
             // Shared footer row keeps category controls aligned with the expense input area.
@@ -265,16 +274,16 @@ namespace ExpenseTracker.WinForms
             }
 
             try { StartLocalDbInstance(); } catch { }
-            if (TryOpenConnection(_connPrimary))
+            if (TryOpenConnection(LocalDbConnectionString))
             {
-                _conn = _connPrimary;
+                _conn = LocalDbConnectionString;
                 return;
             }
 
             var fullMdf = FindDataMdf();
             if (!string.IsNullOrEmpty(fullMdf))
             {
-                var attachFull = string.Format(_connAttachTemplate, fullMdf);
+                var attachFull = string.Format(LocalDbAttachConnectionTemplate, fullMdf);
                 if (TryOpenConnection(attachFull))
                 {
                     _conn = attachFull;
@@ -282,7 +291,7 @@ namespace ExpenseTracker.WinForms
                 }
             }
 
-            _conn = _connPrimary;
+            _conn = LocalDbConnectionString;
             MessageBox.Show(
                 "No database connection is available. Start Docker SQL Server or configure LocalDB, then restart the app.",
                 "Database unavailable",
@@ -466,18 +475,25 @@ namespace ExpenseTracker.WinForms
                     totalRow["Date"] = DBNull.Value;
                     totalRow["Note"] = DBNull.Value;
                     totalRow["CategoryId"] = DBNull.Value;
-                    totalRow["CategoryName"] = DBNull.Value;
+                    totalRow["CategoryName"] = "TOTAL";
                     dt.Rows.Add(totalRow);
                 }
 
                 dgvExpenses.DataSource = dt;
 
-                if (dgvExpenses.Columns.Contains("Id")) dgvExpenses.Columns["Id"].Width = 80;
+                if (dt.Rows.Count > 0 &&
+                    dt.Rows[dt.Rows.Count - 1]["CategoryName"]?.ToString() == "TOTAL")
+                {
+                    dgvExpenses.Rows[dgvExpenses.Rows.Count - 1].DefaultCellStyle.Font =
+                        new Font(dgvExpenses.Font, FontStyle.Bold);
+                }
+
+                if (dgvExpenses.Columns.Contains("Id")) dgvExpenses.Columns["Id"].Visible = false;
                 if (dgvExpenses.Columns.Contains("Amount")) dgvExpenses.Columns["Amount"].Width = 110;
                 if (dgvExpenses.Columns.Contains("Date")) dgvExpenses.Columns["Date"].Width = 150;
                 if (dgvExpenses.Columns.Contains("Note")) dgvExpenses.Columns["Note"].Width = 150;
                 if (dgvExpenses.Columns.Contains("CategoryName")) dgvExpenses.Columns["CategoryName"].Width = 150;
-                if (dgvExpenses.Columns.Contains("CategoryId")) dgvExpenses.Columns["CategoryId"].Visible = true;
+                if (dgvExpenses.Columns.Contains("CategoryId")) dgvExpenses.Columns["CategoryId"].Visible = false;
             }
             catch (Exception ex)
             {
