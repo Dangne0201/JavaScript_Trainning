@@ -21,9 +21,9 @@ namespace ExpenseTracker.WinForms
         private ExpenseRepository _repository;
 
         private const string LocalDbConnectionString =
-            @"Server=(localdb)\MSSQLLocalDB;Database=ExpenseDb;Trusted_Connection=True;";
+            @"Server=(localdb)\MSSQLLocalDB;Database=ExpenseDb;Trusted_Connection=True;Connect Timeout=3;";
         private const string LocalDbAttachConnectionTemplate =
-            @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename={0};Integrated Security=True;Connect Timeout=30;";
+            @"Data Source=(LocalDB)\MSSQLLocalDB;AttachDbFilename={0};Integrated Security=True;Connect Timeout=3;";
 
         // UI controls.
         private ListBox lstCategories;
@@ -58,12 +58,12 @@ namespace ExpenseTracker.WinForms
             Text = "Expense Tracker (WinForms)";
             AutoScaleMode = AutoScaleMode.Dpi;
             Font = SystemFonts.MessageBoxFont;
-            Width = 1300;
-            Height = 640;
-            MinimumSize = new Size(1300, 640);
-            MaximumSize = MinimumSize;
-            FormBorderStyle = FormBorderStyle.FixedSingle;
-            MaximizeBox = false;
+            var workingArea = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1300, 640);
+            Width = Math.Max(800, Math.Min(1300, workingArea.Width - 20));
+            Height = Math.Max(460, Math.Min(640, workingArea.Height - 20));
+            MinimumSize = new Size(Math.Min(900, Width), Math.Min(480, Height));
+            FormBorderStyle = FormBorderStyle.Sizable;
+            MaximizeBox = true;
             KeyPreview = true;
             KeyDown += (s, e) =>
             {
@@ -76,14 +76,15 @@ namespace ExpenseTracker.WinForms
 
             // Root layout: left panel for categories, right panel for expenses.
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
-            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 560));
+            var categoryPanelWidth = Math.Min(560, (int)(ClientSize.Width * 0.43));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, categoryPanelWidth));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             Controls.Add(root);
 
             // Left panel: categories list + buttons.
             var pnlLeft = new Panel { Dock = DockStyle.Fill };
             var lblCat = new Label { Text = "Categories", Dock = DockStyle.Top, Height = 22 };
-            lstCategories = new ListBox { Dock = DockStyle.Fill };
+            lstCategories = new ListBox { Name = "lstCategories", Dock = DockStyle.Fill };
 
             // Right panel: expense grid + input area.
             var pnlRight = new Panel { Dock = DockStyle.Fill };
@@ -91,6 +92,7 @@ namespace ExpenseTracker.WinForms
             dgvExpenses = new DataGridView
             {
                 Dock = DockStyle.Fill,
+                Name = "dgvExpenses",
                 ReadOnly = true,
                 AllowUserToAddRows = false,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
@@ -107,7 +109,11 @@ namespace ExpenseTracker.WinForms
                 if (e.RowIndex >= 0 && e.ColumnIndex >= 0 &&
                     dgvExpenses.Columns[e.ColumnIndex].Name == "Amount")
                 {
-                    e.CellStyle.Format = "N2";
+                    if (e.Value != null && e.Value != DBNull.Value)
+                    {
+                        e.Value = ExpenseSummary.FormatAmount(Convert.ToDecimal(e.Value));
+                        e.FormattingApplied = true;
+                    }
                 }
             };
 
@@ -118,9 +124,9 @@ namespace ExpenseTracker.WinForms
 
             // Category controls on the left footer.
             var footerLeft = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(6), WrapContents = false };
-            btnLoadCategories = new Button { Text = "Load", AutoSize = false, Width = 140, Height = 44, Padding = new Padding(6), Margin = new Padding(12), TextAlign = ContentAlignment.MiddleCenter };
-            txtNewCategory = new TextBox { Width = 200, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(3, 6, 6, 6) };
-            btnAddCategory = new Button { Text = "Add", AutoSize = false, Width = 140, Height = 44, Padding = new Padding(6), Margin = new Padding(12), TextAlign = ContentAlignment.MiddleCenter };
+            btnLoadCategories = new Button { Name = "btnLoadCategories", Text = "Load", AutoSize = false, Width = 90, Height = 44, Padding = new Padding(6), Margin = new Padding(3), TextAlign = ContentAlignment.MiddleCenter };
+            txtNewCategory = new TextBox { Name = "txtNewCategory", Width = Math.Max(140, categoryPanelWidth - 240), Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(3, 6, 3, 6) };
+            btnAddCategory = new Button { Name = "btnAddCategory", Text = "Add", AutoSize = false, Width = 90, Height = 44, Padding = new Padding(6), Margin = new Padding(3), TextAlign = ContentAlignment.MiddleCenter };
 
             footerLeft.Controls.Add(btnLoadCategories);
             footerLeft.Controls.Add(txtNewCategory);
@@ -142,20 +148,20 @@ namespace ExpenseTracker.WinForms
             };
 
             inputTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            inputTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+            inputTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
             inputTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            inputTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+            inputTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
             inputTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             inputTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
             var lblAmount = new Label { Text = "Amount", AutoSize = true, TextAlign = ContentAlignment.MiddleRight, Anchor = AnchorStyles.Right, Margin = new Padding(3, 8, 6, 3) };
-            txtAmount = new TextBox { Width = 120, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(3, 6, 6, 6) };
+            txtAmount = new TextBox { Name = "txtAmount", Width = 120, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(3, 6, 6, 6) };
 
             var lblDate = new Label { Text = "Date", AutoSize = true, TextAlign = ContentAlignment.MiddleRight, Anchor = AnchorStyles.Right, Margin = new Padding(12, 8, 6, 3) };
-            dtpDate = new DateTimePicker { Width = 160, Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd HH:mm", Margin = new Padding(3, 6, 6, 6) };
+            dtpDate = new DateTimePicker { Name = "dtpDate", Width = 130, Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd HH:mm", Margin = new Padding(3, 6, 6, 6) };
 
             var lblNote = new Label { Text = "Note", AutoSize = true, TextAlign = ContentAlignment.MiddleRight, Anchor = AnchorStyles.Right, Margin = new Padding(12, 8, 6, 3) };
-            txtNote = new TextBox { Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(3, 6, 6, 6), Width = 200 };
+            txtNote = new TextBox { Name = "txtNote", Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(3, 6, 6, 6), Width = 200 };
 
             inputTable.Controls.Add(lblAmount, 0, 0);
             inputTable.Controls.Add(txtAmount, 1, 0);
@@ -169,18 +175,20 @@ namespace ExpenseTracker.WinForms
             footerRightTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             footerRightTable.ColumnStyles.Clear();
             footerRightTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            footerRightTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
-            footerRightTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
-            footerRightTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
+            var actionColumnWidth = Math.Min(220, Math.Max(150, (ClientSize.Width - categoryPanelWidth - 20) / 3));
+            footerRightTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, actionColumnWidth));
+            footerRightTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, actionColumnWidth));
+            footerRightTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, actionColumnWidth));
             footerRightTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             footerRightTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
             footerRightTable.Controls.Add(inputTable, 0, 0);
             footerRightTable.SetColumnSpan(inputTable, 6);
 
-            btnDeleteExpense = new Button { Text = "Delete Expense", AutoSize = false, Width = 200, Height = 44, Padding = new Padding(4), Margin = new Padding(12), Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter, UseCompatibleTextRendering = true };
-            var btnLoadExpenses = new Button { Text = "Load Expenses", AutoSize = false, Width = 200, Height = 44, Padding = new Padding(4), Margin = new Padding(12), Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter, UseCompatibleTextRendering = true };
-            btnAddExpense = new Button { Text = "Add Expense", AutoSize = false, Width = 200, Height = 44, Padding = new Padding(4), Margin = new Padding(12), Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter, UseCompatibleTextRendering = true };
+            var actionButtonWidth = actionColumnWidth - 20;
+            btnDeleteExpense = new Button { Name = "btnDeleteExpense", Text = "Delete Expense", AutoSize = false, Width = actionButtonWidth, Height = 44, Padding = new Padding(4), Margin = new Padding(8), Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter, UseCompatibleTextRendering = true };
+            var btnLoadExpenses = new Button { Name = "btnLoadExpenses", Text = "Load Expenses", AutoSize = false, Width = actionButtonWidth, Height = 44, Padding = new Padding(4), Margin = new Padding(8), Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter, UseCompatibleTextRendering = true };
+            btnAddExpense = new Button { Name = "btnAddExpense", Text = "Add Expense", AutoSize = false, Width = actionButtonWidth, Height = 44, Padding = new Padding(4), Margin = new Padding(8), Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter, UseCompatibleTextRendering = true };
 
             footerRightTable.Controls.Add(btnDeleteExpense, 1, 1);
             footerRightTable.Controls.Add(btnLoadExpenses, 2, 1);
@@ -228,7 +236,7 @@ namespace ExpenseTracker.WinForms
             var envConn = GetConnectionStringFromEnvironment();
             if (!string.IsNullOrWhiteSpace(envConn))
             {
-                const int maxRetries = 6;
+                const int maxRetries = 2;
                 for (int attempt = 0; attempt < maxRetries; attempt++)
                 {
                     if (TryOpenConnection(envConn))
@@ -237,7 +245,10 @@ namespace ExpenseTracker.WinForms
                         return;
                     }
 
-                    System.Threading.Thread.Sleep(2000);
+                    if (attempt < maxRetries - 1)
+                    {
+                        System.Threading.Thread.Sleep(500);
+                    }
                 }
 
                 _conn = envConn;
@@ -321,7 +332,8 @@ namespace ExpenseTracker.WinForms
             var builder = new SqlConnectionStringBuilder(connectionString)
             {
                 Encrypt = false,
-                TrustServerCertificate = true
+                TrustServerCertificate = true,
+                ConnectTimeout = 3
             };
             return builder.ConnectionString;
         }
@@ -466,18 +478,18 @@ namespace ExpenseTracker.WinForms
             {
                 var dt = _repository.GetExpenses();
 
-                if (dt.Rows.Count > 0)
-                {
-                    var totalAmount = dt.AsEnumerable().Sum(r => r["Amount"] == DBNull.Value ? 0m : Convert.ToDecimal(r["Amount"]));
-                    var totalRow = dt.NewRow();
-                    totalRow["Id"] = DBNull.Value;
-                    totalRow["Amount"] = totalAmount;
-                    totalRow["Date"] = DBNull.Value;
-                    totalRow["Note"] = DBNull.Value;
-                    totalRow["CategoryId"] = DBNull.Value;
-                    totalRow["CategoryName"] = "TOTAL";
-                    dt.Rows.Add(totalRow);
-                }
+                var totalAmount = ExpenseSummary.CalculateTotal(
+                    dt.AsEnumerable()
+                        .Where(row => row["Amount"] != DBNull.Value)
+                        .Select(row => Convert.ToDecimal(row["Amount"])));
+                var totalRow = dt.NewRow();
+                totalRow["Id"] = DBNull.Value;
+                totalRow["Amount"] = totalAmount;
+                totalRow["Date"] = DBNull.Value;
+                totalRow["Note"] = DBNull.Value;
+                totalRow["CategoryId"] = DBNull.Value;
+                totalRow["CategoryName"] = "TOTAL";
+                dt.Rows.Add(totalRow);
 
                 dgvExpenses.DataSource = dt;
 
@@ -559,7 +571,7 @@ namespace ExpenseTracker.WinForms
                 var idObj = dgvExpenses.CurrentRow.Cells["Id"].Value;
                 if (idObj == null || idObj == DBNull.Value)
                 {
-                    MessageBox.Show("Selected row has no Id.");
+                    MessageBox.Show("The total row cannot be deleted. Select an expense row.");
                     return;
                 }
 

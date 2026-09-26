@@ -12,18 +12,20 @@ Expense Tracker is a single-user Windows desktop portfolio project. The WinForms
 - Docker SQL Server setup with persistent volume and initialization from `data/init.sql`.
 - Starter categories for a new database without fake expense history.
 - Restricted local application login; setup protects its generated password for the current Windows user.
-- Database-independent validation tests and separately tagged, local-only integration test.
+- Database-independent validation/summary tests and separately tagged, local-only integration test.
 - Windows GitHub Actions workflow for restore, build, and unit tests.
 - Reviewer-oriented setup, demo steps, architecture notes, and documented security limitations.
+- Responsive window sizing, current-culture currency formatting, and a clear guard against deleting the total row.
+- A versioned `v0.3.0` review bundle that preserves the historical ZIPs and includes the setup script in its expected directory structure.
 
 ## Remaining proof before calling it ready to share
 
-- Run the documented setup on a clean Windows profile/VM and record the exact result.
-- Run integration tests only against a disposable local Docker database.
-- Run the interactive UI smoke test and verify add/edit/cancel/delete behaviors visually.
-- Capture an authentic screenshot or short screen recording from the running app.
-- Confirm a successful GitHub Actions run before describing CI as green.
-- Generate a new, versioned release bundle and test it; do not distribute the historical ZIPs because they contain an old example database credential.
+- Run the documented setup and `v0.3.0` review bundle on a clean Windows profile/VM; record the exact outcome and verify DPAPI credential creation/reuse there.
+- Reapply and verify the current loopback-only port binding on any existing Docker container created with the older all-interface mapping; do this only with the matching SA password and preserve the existing named volume.
+- Integration test passed against a separately-created, disposable SQL Server container on loopback port 11433; repeat on a clean reviewer machine if possible.
+- The interactive FlaUI launch smoke test passed against that disposable database. Complete the manual add/edit/cancel/delete/restart QA flow before claiming full CRUD UI verification.
+- Capture and inspect an authentic screenshot or short screen recording from the running app on a desktop where the whole form is visible; a cropped capture is not included as portfolio evidence.
+- Confirm a successful GitHub Actions run before describing CI as green. No completed workflow run is currently available for this branch.
 
 ## Deliberate non-goals for this portfolio version
 

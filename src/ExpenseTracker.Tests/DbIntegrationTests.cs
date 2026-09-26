@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 namespace ExpenseTracker.Tests;
@@ -19,14 +20,28 @@ public class DbIntegrationTests
             Encrypt = false,
             TrustServerCertificate = true
         };
+        var expectedPortValue = Environment.GetEnvironmentVariable("EXPENSE_TEST_SQL_PORT");
+        var expectedPort = string.IsNullOrWhiteSpace(expectedPortValue)
+            ? 1433
+            : int.TryParse(expectedPortValue, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedPort)
+                ? parsedPort
+                : -1;
+        var endpoint = builder.DataSource.Split(',', 2);
+        var dataSourcePort = endpoint.Length == 2 &&
+                             int.TryParse(endpoint[1], NumberStyles.None, CultureInfo.InvariantCulture, out var parsedDataSourcePort)
+            ? parsedDataSourcePort
+            : 1433;
         var isAllowedLocalHost =
-            string.Equals(builder.DataSource, "localhost,1433", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(builder.DataSource, "127.0.0.1,1433", StringComparison.OrdinalIgnoreCase);
+            endpoint.Length > 0 &&
+            (string.Equals(endpoint[0], "localhost", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(endpoint[0], "127.0.0.1", StringComparison.OrdinalIgnoreCase));
         if (!string.Equals(builder.InitialCatalog, "ExpenseDb", StringComparison.OrdinalIgnoreCase) ||
-            !isAllowedLocalHost)
+            !isAllowedLocalHost ||
+            expectedPort is < 1 or > 65535 ||
+            dataSourcePort != expectedPort)
         {
             throw new InvalidOperationException(
-                "Integration tests are restricted to ExpenseDb on localhost:1433.");
+                $"Integration tests are restricted to ExpenseDb on localhost:{expectedPort}.");
         }
 
         return builder.ConnectionString;

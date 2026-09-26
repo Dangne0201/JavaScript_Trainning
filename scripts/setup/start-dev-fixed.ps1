@@ -10,6 +10,14 @@ if ([string]::IsNullOrWhiteSpace($saPassword)) {
 if ([string]::IsNullOrWhiteSpace($saPassword)) {
     throw "Set SA_PASSWORD or run setup-all.ps1, which securely prompts for it."
 }
+$sqlPortValue = [Environment]::GetEnvironmentVariable("EXPENSE_TRACKER_SQL_PORT", "Process")
+if ([string]::IsNullOrWhiteSpace($sqlPortValue)) {
+    $sqlPortValue = "1433"
+}
+$sqlPort = 0
+if (-not [int]::TryParse($sqlPortValue, [ref]$sqlPort) -or $sqlPort -lt 1 -or $sqlPort -gt 65535) {
+    throw "EXPENSE_TRACKER_SQL_PORT must be a valid TCP port between 1 and 65535."
+}
 
 $docker = Get-Command docker -ErrorAction SilentlyContinue
 if (-not $docker) {
@@ -156,8 +164,18 @@ else {
     Write-Host "ExpenseDb already exists; existing database data was preserved."
 }
 
-$credentialFolder = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "ExpenseTracker"
-$credentialFile = Join-Path $credentialFolder "app-db-password.bin"
+$credentialFile = [Environment]::GetEnvironmentVariable("EXPENSE_TRACKER_CREDENTIAL_FILE", "Process")
+if ([string]::IsNullOrWhiteSpace($credentialFile)) {
+    $credentialFolder = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "ExpenseTracker"
+    $credentialFile = Join-Path $credentialFolder "app-db-password.bin"
+}
+else {
+    $credentialFile = [IO.Path]::GetFullPath($credentialFile)
+    $credentialFolder = [IO.Path]::GetDirectoryName($credentialFile)
+    if ([string]::IsNullOrWhiteSpace($credentialFolder)) {
+        throw "EXPENSE_TRACKER_CREDENTIAL_FILE must include a directory path."
+    }
+}
 if (Test-Path $credentialFile) {
     try {
         $protectedPassword = [IO.File]::ReadAllBytes($credentialFile)
@@ -222,7 +240,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $connectionBuilder = New-Object System.Data.Common.DbConnectionStringBuilder
-$connectionBuilder["Data Source"] = "localhost,1433"
+$connectionBuilder["Data Source"] = "localhost,$sqlPort"
 $connectionBuilder["Initial Catalog"] = "ExpenseDb"
 $connectionBuilder["User ID"] = "ExpenseApp"
 $connectionBuilder["Password"] = $appPassword

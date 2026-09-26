@@ -32,11 +32,19 @@ try {
         throw "dotnet publish failed."
     }
 
-    Copy-Item (Join-Path $repoRoot "docker-compose.yml") $stagingRoot
+    $bundleCompose = Get-Content (Join-Path $repoRoot "docker-compose.yml") -Raw
+    $bundleCompose = $bundleCompose -replace '(?m)^\s*container_name:\s*expense-mssql\s*\r?\n', ''
+    $bundleCompose = $bundleCompose.Replace(
+        '"127.0.0.1:1433:1433"',
+        '"127.0.0.1:${EXPENSE_TRACKER_SQL_PORT:-1433}:1433"')
+    Set-Content -Path (Join-Path $stagingRoot "docker-compose.yml") -Value $bundleCompose -Encoding ASCII
     New-Item (Join-Path $stagingRoot "data") -ItemType Directory -Force | Out-Null
     Copy-Item (Join-Path $repoRoot "data\init.sql") (Join-Path $stagingRoot "data\init.sql")
-    Copy-Item (Join-Path $repoRoot "scripts\setup\start-dev-fixed.ps1") (Join-Path $stagingRoot "start-dev-fixed.ps1")
+    $bundleSetupDirectory = Join-Path $stagingRoot "scripts\setup"
+    New-Item $bundleSetupDirectory -ItemType Directory -Force | Out-Null
+    Copy-Item (Join-Path $repoRoot "scripts\setup\start-dev-fixed.ps1") (Join-Path $bundleSetupDirectory "start-dev-fixed.ps1")
 
+    $bundleProjectName = "expense-tracker-v" + ($Version -replace '[^a-zA-Z0-9_-]', '-').ToLowerInvariant()
     @'
 function ConvertTo-PlainText([Security.SecureString]$SecureValue) {
     $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureValue)
@@ -46,6 +54,7 @@ function ConvertTo-PlainText([Security.SecureString]$SecureValue) {
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
+$env:COMPOSE_PROJECT_NAME = "__PROJECT_NAME__"
 $saPassword = ConvertTo-PlainText (Read-Host "Enter a strong local SQL Server SA password" -AsSecureString)
 if ($saPassword.Length -lt 12 -or
     $saPassword -notmatch '[A-Z]' -or
@@ -56,12 +65,13 @@ if ($saPassword.Length -lt 12 -or
 }
 
 $env:SA_PASSWORD = $saPassword
-& (Join-Path $root "start-dev-fixed.ps1") -saPassword $saPassword
+& (Join-Path $root "scripts\setup\start-dev-fixed.ps1") -saPassword $saPassword
 if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Database startup failed." }
 
 Remove-Item Env:SA_PASSWORD -ErrorAction SilentlyContinue
 Start-Process (Join-Path $root "app\ExpenseTracker.WinForms.exe") -WorkingDirectory (Join-Path $root "app")
-'@ | Set-Content (Join-Path $stagingRoot "Run-ExpenseTracker.ps1") -Encoding ASCII
+'@ | ForEach-Object { $_.Replace("__PROJECT_NAME__", $bundleProjectName) } |
+        Set-Content (Join-Path $stagingRoot "Run-ExpenseTracker.ps1") -Encoding ASCII
 
     @'
 @echo off

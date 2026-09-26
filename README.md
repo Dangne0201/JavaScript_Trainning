@@ -69,7 +69,7 @@ flowchart LR
 
 `MainForm` owns layout, input binding, and the displayed total. `ExpenseValidation` handles amount/category input rules. `ExpenseRepository` owns parameterized SQL and explicit SQL types. `data/init.sql` creates the schema and adds starter categories only when the category table is empty.
 
-Real screenshots or a screen recording are useful portfolio evidence, but should be captured from the running app; this repository does not include a generated/mock UI image.
+The form resizes to the available screen area. Real screenshots or a screen recording are useful portfolio evidence, but should be captured from the running app; this repository does not include a generated/mock UI image.
 
 ## Run again
 
@@ -83,30 +83,32 @@ Database-independent unit tests:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tests\run-unit-tests.ps1
 ```
 
-Integration tests explicitly start the local Docker service and use only `ExpenseDb` on `localhost:1433`. The test refuses other connection targets:
+Integration tests default to the local Docker service and allow only `ExpenseDb` on loopback port 1433. A separately created disposable instance can be tested on another loopback port by setting `SQL_CONN` and passing `-Port`; see [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md). The test refuses other hosts or databases:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\tests\run-integration-tests.ps1
 ```
 
-UI tests require an interactive Windows desktop and a reachable SQL Server. See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for prerequisites, rollback behavior, and manual QA. GitHub Actions runs restore, build, and database-independent tests only; wait for a successful workflow run before describing CI as green.
+UI tests require an interactive Windows desktop. The UI test script securely prompts for the database admin password, preserves/starts the local Docker database, passes the app connection only to the current test process, and builds the requested configuration. See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for prerequisites, rollback behavior, and manual QA. GitHub Actions runs restore, build, and database-independent tests only; wait for a successful workflow run before describing CI as green.
 
 ## Release bundle
 
-The tracked ZIPs in `artifacts/` are historical bundles that still contain a hard-coded example database credential. Do not use or distribute them as the current demo; they are retained unchanged, and the release script refuses to overwrite them. For a current bundle, choose a new version:
+The older tracked ZIPs, `v0.1.0` and `v0.2.0`, are historical bundles that still contain a hard-coded example database credential. Do not use or distribute them; they are retained unchanged. The current source-built bundle is [expense-tracker-v0.3.0-win-x64.zip](artifacts/expense-tracker-v0.3.0-win-x64.zip). It prompts for a local SA password and provisions the restricted `ExpenseApp` login; it does not include an application or database password. The bundle has been checked for expected paths and credential files, but has not yet been exercised on a clean Windows profile.
+
+To create a later version without overwriting any existing archive:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup\create-release.ps1 -Version "0.3.0"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup\create-release.ps1 -Version "0.3.1"
 ```
 
 The self-contained app still requires Docker Desktop because SQL Server runs in a container.
-The currently tracked ZIPs predate the secure setup flow; use source setup for a current demo until a new versioned bundle has been generated and checked.
 
 ## Troubleshooting
 
 - Docker is not running: open Docker Desktop.
 - Port 1433 is occupied: stop the conflicting SQL Server or change the port consistently in `docker-compose.yml` and the connection string.
 - SQL Server is not ready: inspect `docker logs expense-mssql`.
+- If an existing `expense-mssql` container still shows `0.0.0.0:1433` or `[::]:1433`, rerun setup with the same SA password to apply the current loopback-only Compose binding, then verify `docker ps`. Normal setup preserves the named database volume; never use `docker compose down -v` for this.
 - If the app cannot connect, run setup again with the same SA password and check `docker compose logs mssql`. Do not use `docker compose down -v` as a troubleshooting step: it permanently removes local database data.
 - If the DPAPI app credential cannot be decrypted, preserve the database volume. After confirming the SA password and current Windows user, remove only `%LOCALAPPDATA%\ExpenseTracker\app-db-password.bin` and rerun setup to create a replacement restricted login; this does not reset expense data.
 
@@ -128,9 +130,9 @@ The currently tracked ZIPs predate the secure setup flow; use source setup for a
 - The DPAPI-protected application credential is tied to the Windows user/profile that created it. It is not a portable credential or production identity system.
 - LocalDB/MDF fallback remains for compatibility; Docker is the documented primary path.
 - The app supports create/read/update/delete for expenses and create/read for categories; it has no category edit/delete or reporting dashboard.
-- The app currently uses a local SA connection for demonstration. This is not least-privilege credential design and is not suitable for a production deployment.
+- Setup uses the local SQL Server SA credential only to provision the database and restricted `ExpenseApp` login. The app uses `ExpenseApp`, not the SA account. This local credential model is still not a production security boundary.
 - There is no real screenshot/video asset in this repository yet; only add evidence captured from the actual running application.
 
 ## Repository hygiene
 
-Do not commit `.env`, connection files, database binaries, build output, test results, logs, or passwords. Existing release ZIPs are retained for history but are not recommended as the current demo.
+Do not commit `.env`, connection files, database binaries, build output, test results, logs, or passwords. The historical `v0.1.0` and `v0.2.0` ZIPs are retained for history but are not recommended as the current demo.
