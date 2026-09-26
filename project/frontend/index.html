@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A secure personal task manager with priorities, due dates, and tags."
+    />
+    <title>Task Manager</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">PERSONAL PRODUCTIVITY</p>
+          <h1>Task Manager</h1>
+        </div>
+        <div id="account" class="account" hidden>
+          <span id="username-label"></span>
+          <button
+            id="logout-button"
+            class="button button-secondary"
+            type="button"
+          >
+            Sign out
+          </button>
+        </div>
+      </header>
+
+      <section id="auth-panel" class="panel auth-panel">
+        <h2 id="auth-title">Welcome back</h2>
+        <p id="auth-description">Sign in to view and manage your tasks.</p>
+        <form id="auth-form" class="form-stack">
+          <label for="username">Username</label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            minlength="3"
+            maxlength="30"
+            autocomplete="username"
+            required
+          />
+          <label for="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            minlength="12"
+            maxlength="128"
+            autocomplete="current-password"
+            required
+          />
+          <button id="auth-submit" class="button" type="submit">Sign in</button>
+        </form>
+        <button id="auth-toggle" class="text-button" type="button">
+          Create an account
+        </button>
+      </section>
+
+      <section id="task-app" hidden>
+        <section class="panel">
+          <h2>Create a task</h2>
+          <form id="task-form" class="task-form">
+            <label class="field field-wide" for="task-title">
+              Title
+              <input id="task-title" type="text" maxlength="200" required />
+            </label>
+            <label class="field" for="task-priority">
+              Priority
+              <select id="task-priority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <label class="field" for="task-due-date">
+              Due date
+              <input id="task-due-date" type="date" />
+            </label>
+            <label class="field field-wide" for="task-tags">
+              Tags <span class="hint">(comma-separated)</span>
+              <input
+                id="task-tags"
+                type="text"
+                placeholder="work, study"
+                maxlength="320"
+              />
+            </label>
+            <button class="button field-action" type="submit">Add task</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <h2>Your tasks</h2>
+              <p id="task-count" class="hint"></p>
+            </div>
+          </div>
+          <form id="filter-form" class="filters">
+            <label class="field field-search" for="search">
+              Search
+              <input
+                id="search"
+                type="search"
+                maxlength="100"
+                placeholder="Find a task"
+              />
+            </label>
+            <label class="field" for="filter-status">
+              Status
+              <select id="filter-status">
+                <option value="">All statuses</option>
+                <option value="backlog">Backlog</option>
+                <option value="todo">To do</option>
+                <option value="in_progress">In progress</option>
+                <option value="done">Done</option>
+              </select>
+            </label>
+            <label class="field" for="filter-priority">
+              Priority
+              <select id="filter-priority">
+                <option value="">All priorities</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <label class="field" for="filter-tag">
+              Tag
+              <input
+                id="filter-tag"
+                type="text"
+                maxlength="30"
+                placeholder="Filter by tag"
+              />
+            </label>
+            <label class="field" for="sort-by">
+              Sort by
+              <select id="sort-by">
+                <option value="createdAt">Created</option>
+                <option value="dueDate">Due date</option>
+                <option value="title">Title</option>
+                <option value="priority">Priority</option>
+              </select>
+            </label>
+            <label class="field" for="sort-order">
+              Order
+              <select id="sort-order">
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
+            </label>
+            <button class="button button-secondary field-action" type="submit">
+              Apply
+            </button>
+          </form>
+          <ul id="task-list" class="task-list" aria-live="polite"></ul>
+          <div class="pagination">
+            <button
+              id="previous-page"
+              class="button button-secondary"
+              type="button"
+            >
+              Previous
+            </button>
+            <span id="page-label" class="hint"></span>
+            <button
+              id="next-page"
+              class="button button-secondary"
+              type="button"
+            >
+              Next
+            </button>
+          </div>
+        </section>
+      </section>
+
+      <p id="message" class="message" role="status" aria-live="polite"></p>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

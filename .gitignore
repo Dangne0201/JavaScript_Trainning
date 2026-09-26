@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # .gitignore cho dự án .NET
 bin/
 obj/
@@ -45,3 +46,8 @@ data/*.ldf
 sqlconn.txt
 src\ExpenseTracker.WinForms\bin\Debug\net10.0-windows\sqlconn.txt
 src\ExpenseTracker.WinForms\bin\Release\net10.0-windows\publish\sqlconn.txt
+=======
+/node_modules/
+.DS_Store
+Thumbs.db
+>>>>>>> e7d6540024572ee94b5a35132a0d77653cccc385

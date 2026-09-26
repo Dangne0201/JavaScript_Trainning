@@ -1,0 +1,4 @@
+services:
+  app:
+    environment:
+      JWT_SECRET: local-demo-only-signing-key-never-use-publicly-32chars
