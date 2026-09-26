@@ -1,8 +1,7 @@
 # Architecture and design
 
 Personal Task Manager is a single-page browser application served by an Express
-backend. MongoDB stores users and tasks. The `learning/` folder is separate from
-this application.
+backend. MongoDB stores users and tasks.
 
 ## Request flow
 

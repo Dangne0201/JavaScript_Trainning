@@ -1,24 +1,24 @@
-# JavaScript Training
+# Personal Task Manager
 
-This repository contains JavaScript exercises and a portfolio-ready full-stack
-application: **Personal Task Manager**.
+Full-stack JavaScript portfolio project.
 
-## Featured project
+## Featured portfolio project
 
-The application demonstrates:
+**[Personal Task Manager](project/README.md)** is a full-stack JavaScript app
+with registration and login, private per-user tasks, search and filters, an
+Express REST API, MongoDB, automated tests, and Docker.
 
-- Username/password registration and login with hashed passwords and HTTP-only
-  authentication cookies.
-- Per-user task ownership, so users cannot view or modify another user's tasks.
-- Task workflows, priorities, due dates, and tags.
-- A validated REST API with pagination, search, filtering, and sorting.
-- A service/controller/model backend structure, automated API tests, security
-  middleware, Docker Compose, and GitHub Actions CI.
+![Personal Task Manager demo](project/docs/task-manager-demo.png)
 
-### Run the full application
+**Stack:** JavaScript, Node.js, Express, MongoDB, HTML, CSS, Docker Compose.
+The project currently offers a local Docker demo; there is no hosted public
+demo yet.
 
-For the local demo, only Git and Docker Desktop are required. Install and start
-Docker Desktop, then run these commands in PowerShell:
+### Try the demo locally
+
+Requirements: Git, Docker Desktop, and an internet connection for the first
+image download. Install Git, start Docker Desktop, then run these commands in
+PowerShell:
 
 ```powershell
 git clone https://github.com/Dangne0201/JavaScript_Trainning.git
@@ -26,36 +26,19 @@ cd JavaScript_Trainning\project
 docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
 ```
 
-Then open <http://localhost:5000> and create an account. No Node.js, `.env`
-setup, or separate MongoDB install is needed just to try the app. The demo
-signing key is local-only; do not expose the demo setup publicly. These clone
-instructions include this version only after the changes are pushed or merged
-to GitHub.
+Open <http://localhost:5000> and register an account. No separate Node.js or
+MongoDB installation is needed. See the [project README](project/README.md) for
+requirements, troubleshooting, and how to stop the demo.
 
-To stop, press `Ctrl+C` and optionally run
-`docker compose -f docker-compose.yml -f docker-compose.demo.yml down` from
-`project/`. Task data persists in a Docker volume.
+## Repository map
 
-### Run checks
+| Path                                       | Contents                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------------- |
+| [`project/`](project/README.md)            | Portfolio application, setup instructions, screenshot, and technical docs |
+| [`.github/workflows/`](.github/workflows/) | CI checks and versioned container publishing workflow                     |
 
-```powershell
-cd project\backend
-npm ci
-npm run lint
-npm run format:check
-npm run test:coverage
-```
+## Quality checks
 
-## Project documentation
-
-- [Portfolio project overview and screenshot](project/README.md)
-- [Project setup and user guide](project/docs/HUONG_DAN_SU_DUNG.md)
-- [Architecture and design](project/docs/GIAI_THICH_DU_AN.md)
-- [REST API reference](project/docs/API.md)
-
-To publish a verified Docker image to GitHub Container Registry, push a tag in
-the form `task-manager-v1.0.0`. The release workflow runs the quality checks
-before publishing; it does not deploy to a cloud host.
-
-The `learning/` directory contains independent practice exercises and is not
-required to run the task manager.
+The project's GitHub Actions workflow runs dependency auditing, lint,
+formatting, and automated tests. To run them locally, follow the
+[developer guide](project/docs/HUONG_DAN_SU_DUNG.md).

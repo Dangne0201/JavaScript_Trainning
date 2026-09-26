@@ -37,7 +37,8 @@ the source code alone, and it does not automatically host the app online.
 
 ## Quick start
 
-1. Install and start Git and Docker Desktop.
+1. Install Git and Docker Desktop, then start Docker Desktop. The first run
+   needs an internet connection to download the application and MongoDB images.
 2. Clone the published version of this repository, open a terminal in
    `JavaScript_Trainning\project`, and run:
 
@@ -54,13 +55,22 @@ this configuration publicly. The base `docker-compose.yml` does not supply a
 secret: set a private `JWT_SECRET` of at least 32 characters before starting it
 for any non-demo environment.
 
-The clone instructions work only after this version has been pushed or merged
-to GitHub. An uncommitted working-tree change cannot be included in a visitor's
-clone.
-
 Use `docker compose -f docker-compose.yml -f docker-compose.demo.yml down` to
 stop the services. Data remains in a named Docker volume. To delete local data
 too, add `-v` to that command.
+
+### Troubleshooting
+
+- If Docker reports that port `5000` is already in use, stop the other app
+  using that port, then rerun Compose.
+- If the app starts before MongoDB is ready, wait for Compose to finish its
+  database health check; the app starts after MongoDB is healthy.
+- If the browser cannot connect, check that Docker Desktop is running and that
+  both services are up:
+
+  ```powershell
+  docker compose -f docker-compose.yml -f docker-compose.demo.yml ps
+  ```
 
 See [the user guide](docs/HUONG_DAN_SU_DUNG.md) for local development, tests, and
 legacy-data migration. API details are in [the API reference](docs/API.md).
@@ -81,6 +91,9 @@ There is no hosted demo yet. A concise local walkthrough:
 
 This flow demonstrates the main product and the authorization boundary without
 requiring a seeded production database.
+
+Use a normal browser window and a private/incognito window to try two separate
+accounts on one computer. Each account should only see its own tasks.
 
 ## Screenshots
 
