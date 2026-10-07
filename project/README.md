@@ -61,6 +61,20 @@ too, add `-v` to that command.
 
 ### Troubleshooting
 
+- If Compose fails to pull `node:24-alpine` with `401 Unauthorized` or
+  `incorrect username or password`, Docker may have invalid Docker Hub
+  credentials saved on this computer. Clear them and retry the public image
+  pull:
+
+  ```powershell
+  docker logout
+  docker pull node:24-alpine
+  ```
+
+  If Docker Hub then requires authentication, sign in with
+  `docker login -u YOUR_DOCKER_HUB_USERNAME` and use a Docker Hub access token
+  when prompted. This is a local Docker authentication issue, not a project
+  account or configuration requirement.
 - If Docker reports that port `5000` is already in use, stop the other app
   using that port, then rerun Compose.
 - If the app starts before MongoDB is ready, wait for Compose to finish its
